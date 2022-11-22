@@ -1,0 +1,84 @@
+
+ 1. About Deb386
+
+ Deb386 is a ring 0 debugger. It's using DebugR.bin, a variant of Debug/X,
+ as the debugger core. Its main purpose is to debug the HDPMI DPMI host, but
+ may be used to debug other protected-mode code as well, both ring 0 and 3.
+
+
+ 2. Usage
+ 
+ Deb386 is a DOS TSR, to install it run "deb386 -i". Once installed, it will
+ become active as soon as a ring0-debugger-aware version of HDPMI is launched.
+ This is important, so again: the debugger must be initialized by a program
+ running in ring0 protected-mode, before it can do anything. After this step
+ the debugger prompt will appear if an exception has been detected.
+
+ Deb386 itself understands the following cmdline options:
+
+   -i   install
+   -n   make debugger invisible to Int 41h
+   -u   uninstall.
+
+ Anything behind option -i will be passed to the debugger core DebugR.
+
+
+ 3. Features & Restrictions
+
+ - Deb386 uses the interrupt 68h real-mode API for ring0-debugger detection
+   and initialization ( the same API is used by MS WDEB386 ). It stays in
+   conventional memory and so doesn't has to fiddle with paging so far as the
+   ring0 host "identity-maps" this part of memory.
+
+ - The exceptions that may wake up the debugger are 0, 1, 3, 6, 0Dh and 0Eh,
+   in protected-mode only. No other events are handled. The debugger core
+   DebugR does ignore all exceptions coming from v86-mode. So it's not possible
+   to debug DOS "real-mode" applications with Deb386.
+
+ - As default, Deb386 uses the mode switching routines of HDPMI for its input
+   and output. The debugger will most likely crash if there's an error in those
+   routines.
+    It's possible to change Deb386's I/O to a serial line ( by setting AUXOUT
+   and AUXIN in Deb386.asm to 1 ) or using low-level video/keyboard code ( by
+   setting VIOOUT and KBDIN to 1; see Deb386w.exe below ). Then no mode switch
+   is needed while the debugger is active. There are small catches, though:
+   AUXOUT/AUXIN will need a connection to a terminal, and KBDIN knows the US
+   keyboard layout only.
+
+ - Besides Deb386.exe, there exists a Deb386w.exe. It's a version where
+   low-level video and keyboard access are on. That makes this version
+   independent from HDPMI; so, if a secondary video adapter is installed,
+   Deb386w might be used as a Win3x/Win9x kernel debugger. You'll have to feed
+   DebugR with the -m option to make it assume that the master PIC vectors
+   don't overlap with exception vectors.
+
+ - As default, Deb386 is visible to protected-mode Int 41h. So it will be
+   detected by protected-mode programs, including the HX program loaders
+   ( which will then emit a breakpoint at program start ). If this is to be
+   avoided, add the /n option.
+
+ - Deb386 doesn't use the 80386+ debug registers; to set a breakpoint it
+   has to write an int3 instruction. If the memory page is readonly and the
+   CR0 WP bit is set, a page fault will occur. To avoid this error, one has
+   to clear the WP bit before the debug session; see tool ResWP.exe.
+
+ - HDPMI ring0 code runs with interrupts disabled. There may be some places
+   that are untraceable, assuming that the code isn't interrupted. Also,
+   mode-switching code cannot be single-stepped - so stop single-stepping
+   if instructions like LIDT or LTR appear in the disassembly.
+
+ - If the DPMI host runs clients with IOPL 0 ( there exists HDPMI variants that
+   do that ), the clients will trigger an exception 0Dh if instructions CLI/STI
+   or IN/INS/OUT/OUTS for trapped ports are executed. The debugger core DebugR
+   does ignore such exceptions.
+
+ - when uninstalling, there's no proper way for Deb386 to detect if a DPMI
+   host is still installed, with a IDT that has been modified by Deb386. So
+   always first uninstall the DPMI host, then Deb386.
+
+
+ 4. License
+
+ Deb386 is released under the MIT license. See license.txt for details.
+
+ Andreas Grech
