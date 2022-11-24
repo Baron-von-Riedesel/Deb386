@@ -47,10 +47,12 @@
 
  - Besides Deb386.exe, there exists a Deb386w.exe. It's a version where
    low-level video and keyboard access are on. That makes this version
-   independent from HDPMI; so, if a secondary video adapter is installed,
-   Deb386w might be used as a Win3x/Win9x kernel debugger. You'll have to feed
-   DebugR with the -m option to make it assume that the master PIC vectors
-   don't overlap with exception vectors.
+   independent from HDPMI. It also has an additional commandline option, /2,
+   to direct output to a secondary video adapter. So, if such an adapter is
+   installed, Deb386w might be used as a Win3x/Win9x kernel debugger without
+   the need to setup a serial connection. You'll have to feed DebugR with the
+   -m option to make it assume that the master PIC vectors don't overlap with
+   exception vectors.
 
  - As default, Deb386 is visible to protected-mode Int 41h. So it will be
    detected by protected-mode programs, including the HX program loaders

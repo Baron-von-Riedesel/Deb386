@@ -1,9 +1,10 @@
 
-;*** Deb386: ring 0 debugger for hdpmi.
+;*** Deb386: ring 0 debugger for hdpmi/win3x.
 ;--- uses Debug/X's DebugR.bin variant.
 ;--- assembled with JWasm:
-;--- jwasm -mz Deb386.asm
+;---   jwasm -mz Deb386.asm
 ;--- if Masm is used, DebugR.bin must be converted to DebugR.inc.
+;--- if debug displays are enabled (_DEBUG), JWasm v2.17 is required.
 
 	.286
 	.model tiny
@@ -45,6 +46,12 @@ CONST ends
 endm
 
 DGROUP group CONST
+
+ifdef _DEBUG
+;--- debug displays might be done on a 32-bit stack
+STACK32 segment use32 stack 'STACK'
+STACK32 ends
+endif
 
 XMSMOVE struct
 dwSize dd ?
@@ -109,7 +116,11 @@ enddbg label near
 
 ifdef _DEBUG
 	include dprintfr.inc
+	assume ss:STACK32
+	option stackbase:ebp
 	include dprintfp.inc
+	assume ss:DGROUP
+	option stackbase:bp
 else
 @dprintfr textequ <;>
 @dprintfp textequ <;>
@@ -226,6 +237,11 @@ endif
 
 myint68 endp
 
+ifdef _DEBUG
+	assume ss:STACK32
+	option stackbase:ebp
+endif
+
 myint41 proc
 	cmp ax, DS_DebLoaded
 	jz is4f
@@ -238,11 +254,11 @@ else
 	iretd
 endif
 is4f:
-	@dprintfp "Int 41, DebLoaded, handled"
+;	@dprintfp "Int 41, DebLoaded, handled"
 	mov ax, DS_DebPresent
 	iretd
 isf001:
-	@dprintfp "Int 41, CondBP, handled"
+;	@dprintfp "Int 41, CondBP, handled"
 	iretd
 myint41 endp
 
@@ -259,11 +275,12 @@ initIDT:
 ;--- called with es:edi=IDT
 
 	pushad
-
-;--- this is HDPMI specific
-	mov ax, [esp+8*4+4]
 	push ds
 	mov ds, cs:[wKDDS]
+
+;--- HDPMI specific: set i/o vectors supplied by hdpmi
+
+	mov ax, [esp+2+8*4+4]	; get callers CS
 ife (AUXOUT or VIOOUT)
 	mov dword ptr [dfPutChr+0], ebx
 	mov word ptr [dfPutChr+4], ax
@@ -273,9 +290,7 @@ ife (AUXIN or KBDIN)
 	mov word ptr [dfGetChr+4], ax
 endif
 
-if VIOOUT or AUXOUT	; can't use HDPMI output yet
-	@dprintfp "pminit, initIDT: es:edi=%X:%lX, calling DebugR.Init", es, edi
-endif
+;--- install int 41h handler
 
 	test [wOpt], OPT_NOI41
 	jnz @F
@@ -293,8 +308,9 @@ endif
 	mov word ptr es:[edi+6], 0
 	pop edi
 @@:
-
 	pop ds
+
+	@dprintfp "pminit, initIDT: es:edi=%X:%lX, calling DebugR.Init", es, edi
 
 ;--- debugger expects:
 ;--- ax = data selector, hiword: scratch selector
@@ -303,7 +319,7 @@ endif
 ;--- ebx = offset vio
 ;--- edx = offset kbd
 ;--- esi = linear address cmdline
-;--- es:edi=IDT ( currently not used )
+;--- es:edi=IDT
 
 	mov esi, cs:[dwCmdL]
 	mov ax, cs:[wKDDS]
@@ -317,9 +333,7 @@ endif
 	mov edx, offset kbdproc
 	call cs:[dfInit]
 
-if VIOOUT or AUXOUT
 	@dprintfp "pminit, initIDT: DebugR initialized"
-endif
 
 	popad
 	retd
@@ -329,7 +343,7 @@ initPg:
 	retd
 pminit endp
 
-;--- call int 10h
+;--- DebugR callout
 
 vioproc proc far
 	cmp ah, 0Eh
@@ -354,13 +368,14 @@ elseif AUXOUT
 else
 	pusha
 	mov cl, al
-	call cs:[dfGetStk]
+	call cs:[dfGetStk]	; get current ring0 stack
 	mov bp, sp
+	mov di, ss
 	mov ss, dx
 	mov esp, eax
 	mov al, cl
 	call cs:[dfPutChr]
-	mov ss, cs:[wKDDS]
+	mov ss, di
 	mov sp, bp
 	popa
 endif
@@ -436,6 +451,11 @@ endif
 endif
 	retd
 kbdproc endp
+
+ifdef _DEBUG
+	assume ss:DGROUP
+	option stackbase:bp
+endif
 
 	.data
 

@@ -13,14 +13,11 @@ local sym
 	.data
 sym db text,10,0
 	.code
-	pushcontext cpu
-	.386
 ifb <args>
 	invoke dprintfr, offset sym
 else
 	invoke dprintfr, offset sym, args
 endif
-	popcontext cpu
 endm
 endif
 

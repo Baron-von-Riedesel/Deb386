@@ -2,20 +2,19 @@
 ;--- dprintfp() - debug output for protected-mode
 ;--- preserves all registers, including flags.
 ;--- this code is 16-bit, but works on a 32-bit stack.
+;--- requires JWasm v2.17!
 
 ifdef _DEBUG
-@dprintfp macro text:req,a1,a2,a3,a4
+@dprintfp macro text:req,args:vararg
 local sym
 	.data
 sym db text,10,0
 	.code
-	for arg,<a4,a3,a2,a1>
-	 ifnb <arg>
-	  push arg
-	 endif
-	endm
-	push offset sym
-	call dprintfp
+ifb <args>
+	invoke dprintfp, offset sym
+else
+	invoke dprintfp, offset sym, args
+endif
 endm
 endif
 
@@ -71,37 +70,27 @@ buff32 db 12 dup (?)	; using a static buffer to simplify things
 
 	.code
 
-;--- ds=unknown, ss don't need to be dgroup
+;--- ds=unknown, ss is 32-bit
 
-dprintfp PROC
+dprintfp PROC c uses ds fmt:ptr, args:vararg
 
-;local size_:word
-;local flag:byte
-;local longarg:byte
-;local fill:byte
+local size_:word
+local flag:byte
+local longarg:byte
+local fill:byte
 
-args    equ <[46]>
-fmt     equ <word ptr [44]>
-;oret    equ <[42]>
-;esp     equ <[38]>
-;regs    equ <[6]
-;efl     equ <[2]
-;ds      equ <[0]
-size_   equ <word ptr [-2]>
-flag    equ <byte ptr [-3]>
-longarg equ <byte ptr [-4]>
-fill    equ <byte ptr [-5]>
-
-	push esp
+	pushf
 	pushad
-	pushfd
-	push ds
-	mov ebp, esp
-	sub esp, 8
 	mov ds, cs:[wKDDS]
-	lea edi, args[ebp]
+if VIOOUT
+	cmp [bAlt],0
+	jz @F
+	call SwitchVid
+@@:
+endif
+	lea edi, args
 @@L335:
-	mov si, fmt[ebp]
+	mov si, fmt
 nextchar:
 	lodsb
 	or al,al
@@ -111,21 +100,20 @@ nextchar:
 	call handle_char
 	jmp nextchar
 done:
-	mov esp, ebp
-	sub edi, 2
-	mov [ebp+38], edi	; set esp
-	mov ax, [ebp+42]	; get return addr   
-	mov ss:[edi], ax	; and store it at [esp]
-	pop ds
-	popfd
+if VIOOUT
+	cmp [bAlt],0
+	jz @F
+	call SwitchVid
+@@:
+endif
 	popad
-	pop esp
+	popf
 	ret
 
 formatitem:
 	push @@L335
 	xor dx,dx
-	mov longarg[ebp], dl
+	mov longarg, dl
 	mov bl,1
 	mov cl,' '
 	cmp BYTE PTR [si],'-'
@@ -133,13 +121,13 @@ formatitem:
 	dec bx
 	inc si
 @@:
-	mov flag[ebp], bl
+	mov flag, bl
 	cmp BYTE PTR [si],'0'
 	jne @F
 	mov cl,'0'
 	inc si
 @@:
-	mov fill[ebp], cl
+	mov fill, cl
 	mov bx,dx
 
 	.while byte ptr [si] >= '0' && byte ptr [si] <= '9'
@@ -151,14 +139,14 @@ formatitem:
 		mov bx,ax
 	.endw
 
-	mov size_[ebp],bx
+	mov size_,bx
 	cmp BYTE PTR [si],'l'
 	jne @F
-	mov longarg[ebp], 1
+	mov longarg, 1
 	inc si
 @@:
 	lodsb
-	mov fmt[ebp], si
+	mov fmt, si
 	cmp al,'x'
 	je handle_x
 	cmp al,'X'
@@ -201,7 +189,7 @@ handle_u:
 	jge @F
 	cwd
 @@:
-	cmp longarg[ebp],0
+	cmp longarg,0
 	je @F
 	mov dx,ss:[edi]
 	add edi,2
@@ -218,16 +206,16 @@ handle_s:
 
 output_string:	;display string at ds:si
 	mov ax,si
-	mov bx,size_[ebp]
+	mov bx,size_
 	.while byte ptr [si]
 		inc si
 	.endw
 	sub si,ax
 	xchg ax,si
 	sub bx,ax
-	.if flag[ebp] == 1
+	.if flag == 1
 		.while sword ptr bx > 0
-			mov al, fill[ebp]
+			mov al, fill
 			call handle_char
 			dec bx
 		.endw
@@ -239,33 +227,27 @@ output_string:	;display string at ds:si
 	.endw
 
 	.while sword ptr bx > 0
-		mov al, fill[ebp]
+		mov al, fill
 		call handle_char
 		dec bx
 	.endw
 	retn
 
 handle_char:
-
 	cmp al,10
 	jnz @F
 	mov al,13
 	call @F
 	mov al,10
 @@:
-	mov ah,0Eh
-	push 0
-	push cs
-	push 0
-	call near ptr vioproc
+if VIOOUT
+	call VioPutChar
+elseif AUXOUT
+	call AuxPutChar
+else
+	call [dfPutChr]
+endif
 	retn
-
-args    equ <>
-fmt     equ <>
-size_   equ <>
-flag    equ <>
-longarg equ <>
-fill    equ <>
 
 dprintfp ENDP
 
