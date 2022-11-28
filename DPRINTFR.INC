@@ -21,7 +21,7 @@ endif
 endm
 endif
 
-ltob PROC stdcall uses edi number:dword, outb:word, base:word
+ltobr PROC stdcall uses edi number:dword, outb:word, base:word
 
 	mov ch,0
 	movzx edi, base
@@ -59,7 +59,7 @@ ltob PROC stdcall uses edi number:dword, outb:word, base:word
 	mov ax,bx
 	ret
 
-ltob ENDP
+ltobr ENDP
 
 ;--- ds=unknown, ss doesn't need to be dgroup
 
@@ -186,7 +186,7 @@ handle_u:
 	add di,2
 @@:
 	lea cx,[szTmp]
-	invoke ltob, dx::ax, cx, bx
+	invoke ltobr, dx::ax, cx, bx
 	mov si,ax
 	push ds
 	push ss

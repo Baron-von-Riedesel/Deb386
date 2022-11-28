@@ -1,7 +1,7 @@
 
 ;--- dprintfp() - debug output for protected-mode
 ;--- preserves all registers, including flags.
-;--- this code is 16-bit, but works on a 32-bit stack.
+;--- this code is 16-bit, but assumes running on a 32-bit stack.
 ;--- requires JWasm v2.17!
 
 ifdef _DEBUG
@@ -21,7 +21,7 @@ endif
 ;--- ltob(long n, char * s, int base);
 ;--- value in dx:ax, outbuffer in cx, base in bx
 
-ltob32 PROC uses edi
+ltobp PROC uses edi
 
 	movzx edi, bx	; base in edi
 	push dx
@@ -62,11 +62,11 @@ ltob32 PROC uses edi
 	mov ax,bx
 	ret
 
-ltob32 ENDP
+ltobp ENDP
 
 	.data
 
-buff32 db 12 dup (?)	; using a static buffer to simplify things
+buffp db 12 dup (?)	; using a static buffer to simplify things
 
 	.code
 
@@ -194,8 +194,8 @@ handle_u:
 	mov dx,ss:[edi]
 	add edi,2
 @@:
-	mov cx, offset buff32
-	call ltob32
+	mov cx, offset buffp
+	call ltobp
 	mov si, ax
 	call output_string
 	retn

@@ -4,13 +4,13 @@
 bs equ 8	; backspace
 
 @getcursorpos macro
-	movzx ebx, byte ptr es:[462h];page
-	mov bx, es:[EBX*2+450h]
+	movzx ebx, byte ptr ds:[462h];page
+	mov bx, ds:[EBX*2+450h]
 endm
 
 @setcursorpos macro
-	movzx ebx, byte ptr es:[462h];page
-	mov es:[EBX*2+450h], ax
+	movzx ebx, byte ptr ds:[462h];page
+	mov ds:[EBX*2+450h], ax
 endm
 
 ;--- print a char
@@ -22,13 +22,13 @@ local	wCols:word
 local	bChar:byte
 local	bRows:byte
 
-	push es
+	push ds
 	pushad
 
 	mov bChar, al
-	mov es, cs:[wFlat]
-	mov ch, es:[0484h]			; rows-1
-	mov cl, es:[044Ah]			; cols
+	mov ds, cs:[wFlat]
+	mov ch, ds:[0484h]			; rows-1
+	mov cl, ds:[044Ah]			; cols
 	mov bRows, ch
 	@getcursorpos				; bh=row, bl=col
 	mov al, bh		;row pos
@@ -39,8 +39,8 @@ local	bRows:byte
 	mov bh, 00  ; bx=col pos
 	add bx, bx
 	add bx, ax
-	mov si, es:[044Eh]			; page offset
-	cmp word ptr es:[0463H],3B4h
+	mov si, ds:[044Eh]			; page offset
+	cmp word ptr ds:[0463H],3B4h
 	jz @F
 	add si, 8000h
 @@:
@@ -72,7 +72,7 @@ local	bRows:byte
 	jmp char_done
 @@:
 	movzx ebx, bx
-	mov es:[ebx+esi], al
+	mov ds:[ebx+esi], al
 	inc bx
 	inc bx
 char_done:
@@ -96,7 +96,7 @@ char_done:
 	call cursorset
 ;	call slowdown
 	popad
-	pop es
+	pop ds
 	ret
 
 if 0
@@ -113,8 +113,8 @@ slowdown:
 endif
 
 cursorset:
-	add ax, es:[044EH]	;offset page
-	mov dx, es:[0463H]
+	add ax, ds:[044EH]	;offset page
+	mov dx, ds:[0463H]
 	shr ax, 1			;the CRT offset is one plane only, no attribute bytes 
 	mov cl, al			;first high byte
 	mov al, 0eh
@@ -125,9 +125,9 @@ cursorset:
 	retn
 
 scrollup:			;scroll up one line
-	push ds
 	push es
-	pop ds
+	push ds
+	pop es
 	mov edi, esi
 	push di
 	movzx esi, wCols
@@ -146,7 +146,7 @@ scrollup:			;scroll up one line
 	pop ax
 	pop di
 	sub ax, di
-	pop ds
+	pop es
 	retn
 
 VioPutChar endp
@@ -162,6 +162,8 @@ oldrows   db 24     ; rows - 1
 bAlt  db 0
 
 	.code
+
+;--- DS=DGROUP
 
 InitVid proc
 	push ds
@@ -201,13 +203,17 @@ InitVid endp
 
 ;--- must be bimodal!
 ;--- ds=dgroup
+;--- called by:
+;---  dprintfr
+;---  dprintfp
+;---  vioproc
 
 SwitchVid proc
 	pusha
-	push ds
 	mov dx, [oldcrtp]
 	mov bx, [oldcols]
 	mov ax, [oldmr]
+	push ds
 	push 40h
 	pop ds
 	mov cx, cs:[oldcsrpos]

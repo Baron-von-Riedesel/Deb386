@@ -119,8 +119,6 @@ ifdef _DEBUG
 	assume ss:STACK32
 	option stackbase:ebp
 	include dprintfp.inc
-	assume ss:DGROUP
-	option stackbase:bp
 else
 @dprintfr textequ <;>
 @dprintfp textequ <;>
@@ -133,6 +131,11 @@ elseif AUXOUT
 endif
 if KBDIN
 	include kbdinp.inc
+endif
+
+ifdef _DEBUG
+	assume ss:DGROUP
+	option stackbase:bp
 endif
 
 myint68 proc
@@ -344,6 +347,9 @@ initPg:
 pminit endp
 
 ;--- DebugR callout
+;--- entry:
+;--- ss=dgroup
+;--- ds=currently always dgroup, but may change
 
 vioproc proc far
 	cmp ah, 0Eh
@@ -357,7 +363,10 @@ is0E:
 if VIOOUT
 	cmp cs:[bAlt],0
 	jz isStd
-	call SwitchVid
+	call SwitchVid	; assumes ds==dgroup!
+ ifdef _DEBUG
+	movzx esp, sp
+ endif
 	call VioPutChar
 	call SwitchVid
 	retd

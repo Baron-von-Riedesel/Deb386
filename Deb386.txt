@@ -2,23 +2,25 @@
  1. About Deb386
 
  Deb386 is a ring 0 debugger. It's using DebugR.bin, a variant of Debug/X,
- as the debugger core. Its main purpose is to debug the HDPMI DPMI host, but
- may be used to debug other protected-mode code as well, both ring 0 and 3.
+ as the debugger core. There are two variants of Deb386 supplied, Deb386.exe
+ and Deb386w.exe; the first is supposed to work with HDPMI only, while the
+ latter should run with any privileged code. 
 
 
  2. Usage
  
  Deb386 is a DOS TSR, to install it run "deb386 -i". Once installed, it will
  become active as soon as a ring0-debugger-aware version of HDPMI is launched.
- This is important, so again: the debugger must be initialized by a program
- running in ring0 protected-mode, before it can do anything. After this step
- the debugger prompt will appear if an exception has been detected.
+ This is important, so in other words: the debugger must be initialized by a
+ program running in ring0 protected-mode, before it can do anything. After this
+ step the debugger prompt will appear if an exception has been detected.
 
  Deb386 itself understands the following cmdline options:
 
    -i   install
    -n   make debugger invisible to Int 41h
-   -u   uninstall.
+   -u   uninstall
+   -2   displays on a secondary monitor ( Deb386w only )
 
  Anything behind option -i will be passed to the debugger core DebugR.
 
@@ -26,10 +28,12 @@
  3. Features & Restrictions
 
  - Deb386 uses the interrupt 68h real-mode API for ring0-debugger detection
-   and initialization ( the same API is used by MS WDEB386 ). It stays in
-   conventional memory and so doesn't has to fiddle with paging so far as the
-   ring0 host "identity-maps" this part of memory.
-
+   and initialization ( the same API is used by MS WDEB386 and 386SWAT ). It
+   stays in conventional memory and so doesn't has to fiddle with paging so far
+   as the ring0 host "identity-maps" this part of memory.
+    Note that if WDEB386 or 386SWAT are running, Deb386 will detect that and
+   not install itself.
+ 
  - The exceptions that may wake up the debugger are 0, 1, 3, 6, 0Dh and 0Eh,
    in protected-mode only. No other events are handled. The debugger core
    DebugR does ignore all exceptions coming from v86-mode. So it's not possible
@@ -38,21 +42,20 @@
  - As default, Deb386 uses the mode switching routines of HDPMI for its input
    and output. The debugger will most likely crash if there's an error in those
    routines.
-    It's possible to change Deb386's I/O to a serial line ( by setting AUXOUT
-   and AUXIN in Deb386.asm to 1 ) or using low-level video/keyboard code ( by
-   setting VIOOUT and KBDIN to 1; see Deb386w.exe below ). Then no mode switch
-   is needed while the debugger is active. There are small catches, though:
-   AUXOUT/AUXIN will need a connection to a terminal, and KBDIN knows the US
-   keyboard layout only.
 
- - Besides Deb386.exe, there exists a Deb386w.exe. It's a version where
-   low-level video and keyboard access are on. That makes this version
-   independent from HDPMI. It also has an additional commandline option, /2,
-   to direct output to a secondary video adapter. So, if such an adapter is
-   installed, Deb386w might be used as a Win3x/Win9x kernel debugger without
-   the need to setup a serial connection. You'll have to feed DebugR with the
-   -m option to make it assume that the master PIC vectors don't overlap with
-   exception vectors.
+ - Unlike Deb386, Deb386w does NOT do mode switches. This makes it more generic,
+   but requires to handle I/O on a very low level. There are currently two
+   possibilities: either do the I/O through a serial line ( by activating AUXOUT
+   and AUXIN) or using low-level video/keyboard code ( by setting VIOOUT and
+   KBDIN ). There are small catches, though: AUXOUT/AUXIN will need to setup a
+   connection to a terminal, and KBDIN knows the US/GE keyboard layouts only.
+
+ - Deb386w.exe understands an additional commandline option, /2, to direct
+   output to a secondary video adapter ( if VIOOUT is on ). So, if such an
+   adapter is installed, Deb386w might be used as a Win3x/Win9x kernel debugger
+   without the need to setup a serial connection. You'll have to feed DebugR
+   with the -m option to make it assume that the master PIC vectors don't
+   overlap with exception vectors.
 
  - As default, Deb386 is visible to protected-mode Int 41h. So it will be
    detected by protected-mode programs, including the HX program loaders
