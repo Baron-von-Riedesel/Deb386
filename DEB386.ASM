@@ -18,6 +18,11 @@ OPT_INST   equ 1
 OPT_DEINST equ 2
 OPT_NOI41  equ 4
 OPT_ALTVID equ 8
+OPT_INT3INIT equ 16
+
+ifndef INT4102
+INT4102 equ 1	; 1=display debug string displays
+endif
 
 cr equ 13
 lf equ 10
@@ -245,9 +250,51 @@ ifdef _DEBUG
 	option stackbase:ebp
 endif
 
+if INT4102
+
+;--- display string ds:esi
+
+dispstr proc
+if VIOOUT
+	cmp cs:[bAlt],0
+	jz @F
+	push ds
+	mov ds, cs:[wKDDS]
+	call SwitchVid	; assumes ds==dgroup!
+	pop ds
+	call @F
+	push ds
+	mov ds, cs:[wKDDS]
+	call SwitchVid
+	pop ds
+	ret
+@@:
+endif
+@@:
+	lodsb ds:[esi]
+	and al, al
+	jz @F
+if VIOOUT
+	call VioPutChar
+elseif AUXOUT
+	call AuxPutChar
+else
+	call cs:[dfPutChr]
+endif
+	jmp @B
+@@:
+	ret
+dispstr endp
+
+endif
+
 myint41 proc
 	cmp ax, DS_DebLoaded
 	jz is4f
+if INT4102
+	cmp ax, DS_Out_Str
+	jz is02
+endif
 	cmp ax, DS_CondBP
 	jz isf001
 	@dprintfp "Int 41, ax=%X, unhandled", ax
@@ -257,11 +304,22 @@ else
 	iretd
 endif
 is4f:
-;	@dprintfp "Int 41, DebLoaded, handled"
+	@dprintfp "Int 41, DebLoaded: handled"
 	mov ax, DS_DebPresent
 	iretd
+if INT4102
+is02:
+	pushad
+	call dispstr
+	popad
+	iretd
+endif
 isf001:
-;	@dprintfp "Int 41, CondBP, handled"
+	test cs:[wOpt], OPT_INT3INIT
+	jz @F
+	int 3
+@@:
+	@dprintfp "Int 41, CondBP, handled"
 	iretd
 myint41 endp
 
@@ -276,6 +334,14 @@ pminit proc far
 initIDT:
 
 ;--- called with es:edi=IDT
+
+if (AUXOUT or VIOOUT) eq 0 or (AUXIN or KBDIN) eq 0
+;--- if i/o must be thru HDPMI, exit quickly if not called by HDPMI
+	cmp dword ptr ds:[0], "MPDH"   
+	jz @F
+	retd
+@@:
+endif
 
 	pushad
 	push ds
@@ -391,7 +457,7 @@ endif
 	retd
 is03:		; get cursor pos
 if AUXOUT
-	mov dx, 1
+	call AuxGetCsrPos
 else
 	push ds
 	push bx
@@ -515,6 +581,11 @@ noti:
 	cmp ax,'n'
 	jnz @F
 	or di, OPT_NOI41
+	retn
+@@:
+	cmp ax,'b'
+	jnz @F
+	or di, OPT_INT3INIT
 	retn
 @@:
 if VIOOUT
@@ -718,12 +789,13 @@ helpmsg label byte
 	db "Deb386 v1.0, ring 0 debugger",13,10
 	db "usage: Deb386 [options]",13,10
 	db " options:",13,10
-	db "  -i [argument]   install",13,10
-	db "  -u              uninstall",13,10
-	db "  -n              invisible to Int 41h",13,10
 if VIOOUT
 	db "  -2              use alternate video",13,10
 endif
+	db "  -b              stop at init",13,10
+	db "  -i [argument]   install",13,10
+	db "  -n              invisible to Int 41h",13,10
+	db "  -u              uninstall",13,10
 	db "  The argument behind the -i option is passed to DebugR.",13,10
 	db "  It must be enclosed in quotes if it contains spaces.",13,10
 	db '$'

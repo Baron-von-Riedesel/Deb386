@@ -9,6 +9,12 @@ XON 		= 11h
 XOFF		= 13h
 EOT 		= 03H
 
+	.data
+
+wCsrPos dw 0
+
+	.code
+
 
 ;--- display a char in AL
 
@@ -46,9 +52,36 @@ endif
 	xchg al, ah
 	mov dx, _PORT_
 	out dx, al
+	push ds
+	mov ds, cs:[wKDDS]
+	call setcsrpos
+	pop ds
 	popa
 	ret
+
+setcsrpos:
+	cmp al, 13
+	jz col00
+	cmp al, 10
+	jz nochg
+	cmp al, 8
+	jz back
+	inc byte ptr [wCsrPos]
+	retn
+back:
+	dec byte ptr [wCsrPos]
+	retn
+col00:
+	mov byte ptr [wCsrPos], 0
+nochg:
+	retn
+
 AuxPutChar endp
+
+AuxGetCsrPos proc
+	mov dx, cs:[wCsrPos]
+	ret
+AuxGetCsrPos endp
 
 ;--- get a char in AL
 

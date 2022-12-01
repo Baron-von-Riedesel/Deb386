@@ -1,5 +1,5 @@
 
-;--- poll keyboard ( US/GE key layout )
+;--- poll keyboard ( US/GR key layout )
 
 ifndef KEYS
 KEYS textequ <KBD_US>

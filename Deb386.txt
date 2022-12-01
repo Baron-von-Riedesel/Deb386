@@ -18,6 +18,7 @@
  Deb386 itself understands the following cmdline options:
 
    -i   install
+   -b   stop at init
    -n   make debugger invisible to Int 41h
    -u   uninstall
    -2   displays on a secondary monitor ( Deb386w only )
@@ -25,37 +26,21 @@
  Anything behind option -i will be passed to the debugger core DebugR.
 
 
- 3. Features & Restrictions
+ 3. Details
 
- - Deb386 uses the interrupt 68h real-mode API for ring0-debugger detection
-   and initialization ( the same API is used by MS WDEB386 and 386SWAT ). It
-   stays in conventional memory and so doesn't has to fiddle with paging so far
-   as the ring0 host "identity-maps" this part of memory.
+ 3.1 Both Deb386 and Deb386w
+
+ - The debugger uses the interrupt 68h real-mode API for ring0-debugger
+   detection and initialization ( the same API is used by MS WDEB386 and
+   386SWAT ). It stays in conventional memory and so doesn't has to fiddle
+   with paging so far as the ring0 host "identity-maps" this part of memory.
     Note that if WDEB386 or 386SWAT are running, Deb386 will detect that and
    not install itself.
- 
+
  - The exceptions that may wake up the debugger are 0, 1, 3, 6, 0Dh and 0Eh,
    in protected-mode only. No other events are handled. The debugger core
    DebugR does ignore all exceptions coming from v86-mode. So it's not possible
    to debug DOS "real-mode" applications with Deb386.
-
- - As default, Deb386 uses the mode switching routines of HDPMI for its input
-   and output. The debugger will most likely crash if there's an error in those
-   routines.
-
- - Unlike Deb386, Deb386w does NOT do mode switches. This makes it more generic,
-   but requires to handle I/O on a very low level. There are currently two
-   possibilities: either do the I/O through a serial line ( by activating AUXOUT
-   and AUXIN) or using low-level video/keyboard code ( by setting VIOOUT and
-   KBDIN ). There are small catches, though: AUXOUT/AUXIN will need to setup a
-   connection to a terminal, and KBDIN knows the US/GE keyboard layouts only.
-
- - Deb386w.exe understands an additional commandline option, /2, to direct
-   output to a secondary video adapter ( if VIOOUT is on ). So, if such an
-   adapter is installed, Deb386w might be used as a Win3x/Win9x kernel debugger
-   without the need to setup a serial connection. You'll have to feed DebugR
-   with the -m option to make it assume that the master PIC vectors don't
-   overlap with exception vectors.
 
  - As default, Deb386 is visible to protected-mode Int 41h. So it will be
    detected by protected-mode programs, including the HX program loaders
@@ -67,22 +52,71 @@
    CR0 WP bit is set, a page fault will occur. To avoid this error, one has
    to clear the WP bit before the debug session; see tool ResWP.exe.
 
- - HDPMI ring0 code runs with interrupts disabled. There may be some places
-   that are untraceable, assuming that the code isn't interrupted. Also,
-   mode-switching code cannot be single-stepped - so stop single-stepping
-   if instructions like LIDT or LTR appear in the disassembly.
-
  - If the DPMI host runs clients with IOPL 0 ( there exists HDPMI variants that
    do that ), the clients will trigger an exception 0Dh if instructions CLI/STI
    or IN/INS/OUT/OUTS for trapped ports are executed. The debugger core DebugR
    does ignore such exceptions.
 
- - when uninstalling, there's no proper way for Deb386 to detect if a DPMI
+ - The debugger core DebugR has absolutely no knowledge about Windows or DOS
+   peculiarities. So, for example, it cannot distinguish "invalid page faults"
+   and "valid" ones.
+
+ 3.2 Deb386
+
+ - As default, Deb386 uses the mode switching routines of HDPMI for its input
+   and output. The debugger will most likely crash if there's an error in those
+   routines.
+
+ - HDPMI ring0 code runs with interrupts disabled. There may be some places
+   that are untraceable, assuming that the code isn't interrupted. Also,
+   mode-switching code cannot be single-stepped - so stop single-stepping
+   if instructions like LIDT or LTR appear in the disassembly.
+
+ - When uninstalling, there's no proper way for Deb386 to detect if a DPMI
    host is still installed, with a IDT that has been modified by Deb386. So
    always first uninstall the DPMI host, then Deb386.
 
+ - Using option /b the debugger will stop while HDPMI is still located in
+   conventional memory.
 
- 4. License
+ 3.3 Deb386w
+
+ - Deb386w does NOT do mode switches. This makes it more generic, but requires
+   to handle I/O on a rather low level. There are currently two possibilities:
+   either do the I/O through a serial line or using low-level video/keyboard
+   code:
+
+   a) I/O through a serial connection (COMx). This requires to assemble Deb386w
+     with options -DAUXOUT=1 and -DAUXIN=1 ( see Makefile for details ). The
+     default for the COM port is COM1, this may be changed in file AUXOUT.INC.
+
+     As an example, if DOS is running in the Qemu emulator, one may connect the
+     emulated COM port to the terminal, using Qemu cmdline options:
+
+    -chardev stdio,id=char0,logfile=serial.log,signal=off -serial chardev:char0
+
+   b) I/O through low-level video/keyboard code. This requires to assemble
+     Deb386w with options -DVIOOUT=1 and -DKBDIN=1. The output may be directed
+     to a secondary ( monochrome ) adapter with cmdline option /2. The input
+     is a slight problem, since key translations have to be done by the
+     debugger; there exist 2 translation tables, for US or GR keyboards ( see
+     Makefile for details ).
+
+ - Since Deb386w uses the same interface than WDEB386 does, it might be used as
+   a ( rather restricted ) Win3x/Win9x kernel debugger. In any case, you'll
+   have to feed DebugR with the -m option to make it assume that the master PIC
+   vectors don't overlap with exception vectors.
+
+
+ 4, Requirements to create the Binaries
+
+   - JWasm.
+   - DebugR - this Debug/X variant is included as a binary.
+   - if debug displays are to be activated, JWasm v2.17+ is needed.
+   - make utility.
+
+
+ 5. License
 
  Deb386 is released under the MIT license. See license.txt for details.
 
