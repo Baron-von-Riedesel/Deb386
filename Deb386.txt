@@ -21,7 +21,11 @@
    -b   stop at init
    -n   make debugger invisible to Int 41h
    -u   uninstall
-   -2   displays on a secondary monitor ( Deb386w only )
+
+ Deb386w additionally accepts:
+
+   -c:n COM port to use ( if AUXIN/AUXOUT is active )
+   -2   displays on secondary monitor ( if KBDIN/VIOOUT is active )
 
  Anything behind option -i will be passed to the debugger core DebugR.
 
@@ -88,7 +92,7 @@
 
    a) I/O through a serial connection (COMx). This requires to assemble Deb386w
      with options -DAUXOUT=1 and -DAUXIN=1 ( see Makefile for details ). The
-     default for the COM port is COM1, this may be changed in file AUXOUT.INC.
+     default for the COM port is COM1, may be changed with option /C.
 
      As an example, if DOS is running in the Qemu emulator, one may connect the
      emulated COM port to the terminal, using Qemu cmdline options:
@@ -99,8 +103,8 @@
      Deb386w with options -DVIOOUT=1 and -DKBDIN=1. The output may be directed
      to a secondary ( monochrome ) adapter with cmdline option /2. The input
      is a slight problem, since key translations have to be done by the
-     debugger; there exist 2 translation tables, for US or GR keyboards ( see
-     Makefile for details ).
+     debugger; there exist 2 translation tables, for US or GR keyboards, default
+     is GR ( see below how to set US ).
 
  - Since Deb386w uses the same interface than WDEB386 does, it might be used as
    a ( rather restricted ) Win3x/Win9x kernel debugger. In any case, you'll
@@ -114,6 +118,9 @@
    - DebugR - this Debug/X variant is included as a binary.
    - if debug displays are to be activated, JWasm v2.17+ is needed.
    - make utility.
+
+   "nmake aux=1" will create Deb386w.exe with AUXIN/AUXOUT enabled.
+   "nmake kbd=us" will create Deb386w.exe with US kbd layout support.
 
 
  5. License

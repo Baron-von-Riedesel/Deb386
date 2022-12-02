@@ -1,9 +1,21 @@
 
 # create Deb386.exe, Deb386w.exe & ResWP.exe.
-# path for DebugR probably must be adjusted.
+#
+# path for DebugR (DEBUGRDIR) probably must be adjusted.
+#
+# if i/o is to be thru COMx, run: nmake aux=1
+# if kbd is to be US, run: nmake kbd=us
+
+!ifndef AUX
+AUX=0
+!endif
+!ifndef KBD
+KBD=GR
+!endif
+
+DEBUGRDIR = \projects\debug\build
 
 odir = build
-DEBUGRDIR = \projects\debug\build
 
 ALL: $(odir) $(odir)\Deb386.exe $(odir)\Deb386w.exe $(odir)\ResWP.exe
 
@@ -13,14 +25,12 @@ $(odir):
 $(odir)\Deb386.exe: Deb386.asm $(odir)\DebugR.bin Makefile dprintfr.inc dprintfp.inc vioout.inc
 	@jwasm -nologo -mz -Sg -DBINDIR=$(odir) -DINT4102=0 -Fl$* -Fo$* Deb386.asm
 
-
 $(odir)\Deb386w.exe: Deb386.asm $(odir)\DebugR.bin Makefile dprintfr.inc dprintfp.inc vioout.inc kbdinp.inc auxout.inc
-# the next line is for low-level video/keyboard code ( US keyboard )
-#	@jwasm -nologo -mz -Sg -DVIOOUT=1 -DKBDIN=1 -DBINDIR=$(odir) -Fl$* -Fo$* Deb386.asm
-# the next line is for low-level video/keyboard code ( GR keyboard )
-	@jwasm -nologo -mz -Sg -DVIOOUT=1 -DKBDIN=1 -DKEYS=KBD_GR -DBINDIR=$(odir) -Fl$* -Fo$* Deb386.asm
-# the next line is for I/O through a COM port
-#	@jwasm -nologo -mz -Sg -DAUXOUT=1 -DAUXIN=1 -DBINDIR=$(odir) -Fl$* -Fo$* Deb386.asm
+!if $(AUX)
+	@jwasm -nologo -mz -Sg -DAUXOUT=1 -DAUXIN=1 -DBINDIR=$(odir) -Fl$* -Fo$* Deb386.asm
+!else
+	@jwasm -nologo -mz -Sg -DVIOOUT=1 -DKBDIN=1 -DKEYS=KBD_$(KBD) -DBINDIR=$(odir) -Fl$* -Fo$* Deb386.asm
+!endif
 
 $(odir)\DebugR.bin: $(DEBUGRDIR)\DebugR.bin
 	@cd $(odir)
@@ -28,7 +38,7 @@ $(odir)\DebugR.bin: $(DEBUGRDIR)\DebugR.bin
 	@cd ..
 
 $(odir)\ResWP.exe: ResWP.asm
-	@jwasm -mz -Fl$* -Fo$* ResWP.asm
+	@jwasm -nologo -mz -Fl$* -Fo$* ResWP.asm
 
 clean:
 	@del $(odir)\Deb386.exe

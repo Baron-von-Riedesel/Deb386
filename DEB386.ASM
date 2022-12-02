@@ -595,6 +595,19 @@ if VIOOUT
 	retn
 @@:
 endif
+if AUXIN or AUXOUT
+	cmp ax,':c'
+	jnz @F
+	lodsw
+	cmp ax, '1'
+	jb @F
+	cmp ax, '4'
+	ja @F
+	sub al, '1'
+	mov [wPort], ax
+	retn
+@@:
+endif
 
 ;--- handle further options here
 
@@ -793,6 +806,9 @@ if VIOOUT
 	db "  -2              use alternate video",13,10
 endif
 	db "  -b              stop at init",13,10
+if AUXIN or AUXOUT
+	db "  -c:[1|2|3|4]    set COM port",13,10
+endif
 	db "  -i [argument]   install",13,10
 	db "  -n              invisible to Int 41h",13,10
 	db "  -u              uninstall",13,10

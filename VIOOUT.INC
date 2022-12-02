@@ -13,6 +13,11 @@ endm
 	mov ds:[EBX*2+450h], ax
 endm
 
+	pushcontext cpu
+ifdef __JWASM__
+	.486	; make sure LEAVE isn't created ( code might run on a 32-bit stack )
+endif
+
 ;--- print a char
 ;--- no registers modified
 
@@ -150,6 +155,8 @@ scrollup:			;scroll up one line
 	retn
 
 VioPutChar endp
+
+	popcontext cpu
 
 	.data
 
