@@ -97,6 +97,7 @@ AuxGetChar proc
 	mov ds, cs:[wFlat]
 	shl bx, 1
 	mov bx, [bx+400h]
+	pop ds
 	lea dx, [bx+6]		;MSR - modem status register
 	in al, dx			;DSR - modem(=DCE) ready?
 	and al, 20h
