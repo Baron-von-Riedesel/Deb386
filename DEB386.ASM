@@ -14,15 +14,17 @@
 	option proc:private
 	.386
 
+NOXMS   equ 1	; 1=don't use XMS to save DebugR init code
+ifndef INT4102
+INT4102 equ 1	; 1=display debug string displays
+endif
+
 OPT_INST   equ 1
 OPT_DEINST equ 2
 OPT_NOI41  equ 4
 OPT_ALTVID equ 8
 OPT_INT3INIT equ 16
-
-ifndef INT4102
-INT4102 equ 1	; 1=display debug string displays
-endif
+OPT_SINGLE equ 32
 
 cr equ 13
 lf equ 10
@@ -58,6 +60,7 @@ STACK32 segment use32 stack 'STACK'
 STACK32 ends
 endif
 
+ife NOXMS
 XMSMOVE struct
 dwSize dd ?
 hSrc   dw ?
@@ -65,6 +68,7 @@ dwSrc  dd ?
 hDst   dw ?
 dwDst  dd ?
 XMSMOVE ends
+endif
 
 	include debugsys.inc
 
@@ -82,7 +86,7 @@ wOpt  dw 0
 wKDCS dw ?
 wKDDS dw ?
 wFlat dw ?
-wGDT  dw ?
+;wGDT  dw ?
 dwCmdL dd ?
 
 dfInit label fword
@@ -100,11 +104,16 @@ ife ( AUXIN or KBDIN )
 dfGetChr df ?
 endif
 
-dwXMS   dd ?
-wHdl    dw ?
-wStart  dw ?
-wSize   dw ?
+wStart  dw ?	; start offset of DebugR init code
+wSize   dw ?	; size of DebugR init code
+wHdl    dw ?	; file/XMS handle
+if NOXMS
+wMyPSP  dw ?	; PSP of Deb386
+wHdrSiz dw ?	; size of MZ hdr in bytes
+else
+dwXMS   dd ?   
 xmsbm   XMSMOVE <>
+endif
 
 	.code
 
@@ -155,8 +164,14 @@ endif
 	@dprintfr "int 68, ax=%X, unhandled", ax
 	jmp cs:[oldint68]
 isId:
+	cmp cs:[wKDCS],0	; PM init happened already?
+	jz @F
+	test cs:[wOpt], OPT_SINGLE	; in single mode no further identification
+	jnz _iret
+@@:
 	@dprintfr "int 68, ax=%X, returning D386_Id", ax
 	mov ax, D386_Id
+_iret:
 	iret
 ifdef _DEBUG
 is51:
@@ -187,7 +202,7 @@ isPrepPM:
 	add cx, 8
 	mov cs:[wKDDS], cx
 	mov cs:[wFlat], bx
-	mov cs:[wGDT], dx
+;	mov cs:[wGDT], dx
 
 ;--- init code/data GDT descriptors for DebugR
 
@@ -214,6 +229,30 @@ isPrepPM:
 
 	push cs
 	pop ds
+if NOXMS
+	int 3
+	mov ah, 51h
+	int 21h
+	push bx
+	mov bx, [wMyPSP]
+	mov ah, 50h
+	int 21h
+	mov bx, [wHdl]
+	mov dx, [wStart]
+	push dx
+	add dx, [wHdrSiz]
+	xor cx, cx
+	mov ax, 4200h
+	int 21h
+	pop dx
+	add dx, offset startdbg
+	mov cx, [wSize]
+	mov ah, 3fh
+	int 21h
+	pop bx
+	mov ah, 50h
+	int 21h
+else
 	mov si, offset xmsbm
 ;	mov [si].XMSMOVE.dwSize, sizedbg
 	mov ax, [wHdl]
@@ -225,6 +264,7 @@ isPrepPM:
 	mov word ptr [si].XMSMOVE.dwDst+2, cs
 	mov ah, 0Bh
 	call [dwXMS]
+endif
 
 ife (AUXIN or KBDIN)
 
@@ -608,6 +648,11 @@ if AUXIN or AUXOUT
 	retn
 @@:
 endif
+	cmp ax,"s"
+	jnz @F
+	or di, OPT_SINGLE
+	retn
+@@:
 
 ;--- handle further options here
 
@@ -626,6 +671,9 @@ main proc c argc:word, argv:ptr
 	mov ah, 51h
 	int 21h
 	mov es, bx
+if NOXMS
+	mov [wMyPSP], es
+endif
 
 	mov bx, argv
 	add bx, 2
@@ -694,8 +742,8 @@ endif
 	mov [wSize], cx
 	mov [wStart], di
 
-
-;--- get XMS block to save/restore DebugR.bin binary
+ife NOXMS
+;--- get XMS block to save/restore DebugR's init code part
 	mov ax, 4300h
 	int 2Fh
 	cmp al, 80h
@@ -730,6 +778,39 @@ endif
 	mov dx, DStr("XMS block move failed",13,10)
 	cmp ax, 0
 	jz printandexit
+else
+;--- get path of Deb386 and open it
+	mov es, [wMyPSP]
+	mov es, es:[002Ch]
+	xor di, di
+	mov al, 0
+	or cx, -1
+@@:
+	repnz scasb
+	cmp byte ptr es:[di], 0
+	jnz @B
+	add di, 3
+	push ds
+	push es
+	pop ds
+	mov dx, di
+	mov ax, 3D00h
+	int 21h
+	pop ds
+	mov dx, DStr("cannot open Deb386 binary",13,10)
+	jc printandexit
+	mov [wHdl], ax
+	mov bx, ax
+	sub sp, 10
+	mov dx, sp
+	mov cx, 10
+	mov ah, 3Fh
+	int 21h
+	add sp, 8
+	pop ax
+	shl ax, 4
+	mov [wHdrSiz], ax
+endif
 
 ;--- hook Int 68h
 
@@ -745,6 +826,14 @@ endif
 	call printstring
 
 ;--- go resident
+
+	mov cx, 5
+	xor bx, bx
+@@:
+	mov ah, 3Eh
+	int 21h
+	inc bx
+	loop @B
 
 	mov ax, cs
 	sub ax, 10h
@@ -769,31 +858,50 @@ uninstall:
 	mov dx, DStr("No installed Deb386 found",13,10)
 	push 0
 	pop es
-	cmp dword ptr  es:[68h*4], 0
-	jz printandexit
-	mov ah, D386_Identify
-	int 68h
-	cmp ax, D386_Id
-	jnz printandexit
-
-	mov dx, DStr("Can't uninstall",13,10)
 	mov eax, es:[68h*4]
+	and eax, eax
+	jz printandexit
+	mov dx, DStr("Can't uninstall",13,10)
 	cmp ax, offset myint68
 	jnz printandexit
+
+;	mov ah, D386_Identify
+;	int 68h
+;	cmp ax, D386_Id
+;	jnz printandexit
+
 	shr eax, 16
-	mov ds, ax
+
+	mov fs, ax		; fs = installed instance
+	mov ecx, fs:[0]
+	cmp ecx, cs:[0]
+	jnz printandexit
+
 	mov dx, cs
 	sub dx, 10h
-	mov ecx, [oldint68]
+	mov ecx, fs:[oldint68]
 	mov es:[68h*4], ecx
 	sub ax, 10h+1
 	mov es, ax
 	mov es:[1], dx
-	mov dx, [wHdl]
+ife NOXMS
+	mov dx, fs:[wHdl]
 	mov ah, 0Ah
-	call [dwXMS]
-	push cs
-	pop ds
+	call fs:[dwXMS]
+else
+	mov ah, 51h
+	int 21h
+	push bx
+	mov bx, fs:[wMyPSP]
+	mov ah, 50h
+	int 21h
+	mov bx, fs:[wHdl]
+	mov ah, 3Eh
+	int 21h
+	pop bx
+	mov ah, 50h
+	int 21h
+endif
 	mov dx, DStr("Deb386 uninstalled",13,10)
 	jmp printandexit
 
@@ -811,6 +919,7 @@ if AUXIN or AUXOUT
 endif
 	db "  -i [argument]   install",13,10
 	db "  -n              invisible to Int 41h",13,10
+	db "  -s              single mode",13,10
 	db "  -u              uninstall",13,10
 	db "  The argument behind the -i option is passed to DebugR.",13,10
 	db "  It must be enclosed in quotes if it contains spaces.",13,10

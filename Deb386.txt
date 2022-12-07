@@ -20,6 +20,7 @@
    -i   install
    -b   stop at init
    -n   make debugger invisible to Int 41h
+   -s   single mode
    -u   uninstall
 
  Deb386w additionally accepts:
@@ -36,7 +37,7 @@
 
  - The debugger uses the interrupt 68h real-mode API for ring0-debugger
    detection and initialization ( the same API is used by MS WDEB386 and
-   386SWAT ). It stays in conventional memory and so doesn't has to fiddle
+   386SWAT ). It stays in conventional memory and so doesn't have to fiddle
    with paging so far as the ring0 host "identity-maps" this part of memory.
     Note that if WDEB386 or 386SWAT are running, Deb386 will detect that and
    not install itself.
@@ -50,6 +51,12 @@
    detected by protected-mode programs, including the HX program loaders
    ( which will then emit a breakpoint at program start ). If this is to be
    avoided, add the /n option.
+
+ - The single mode option is useful if there exist the possibility that
+   multiple ring0 protected-mode applications may try to use the debugger
+   at the same time. This may happen if both a VCPI host and VCPI client
+   detect the presence of the debugger. Single mode will make Deb386 hide
+   itself once it has been initialized for protected-mode.
 
  - Deb386 doesn't use the 80386+ debug registers; to set a breakpoint it
    has to write an int3 instruction. If the memory page is readonly and the

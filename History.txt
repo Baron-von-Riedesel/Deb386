@@ -1,0 +1,8 @@
+
+
+  __/2022: v1.1
+    - usage of XMS now optional.
+    - closed files 0-4 when going resident.
+
+  12/2022: v1.0
+    - initial.
