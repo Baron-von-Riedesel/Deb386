@@ -1,5 +1,5 @@
 
-# create Deb386.exe, Deb386w.exe & ResWP.exe.
+# create Deb386.exe & ResWP.exe.
 #
 # path for DebugR (DEBUGRDIR) probably must be adjusted.
 #
@@ -17,15 +17,12 @@ DEBUGRDIR = \projects\debug\build
 
 odir = build
 
-ALL: $(odir) $(odir)\Deb386.exe $(odir)\Deb386w.exe $(odir)\ResWP.exe
+ALL: $(odir) $(odir)\Deb386.exe $(odir)\ResWP.exe
 
 $(odir):
 	@mkdir $(odir)
 
-$(odir)\Deb386.exe: Deb386.asm $(odir)\DebugR.bin Makefile dprintfr.inc dprintfp.inc vioout.inc
-	@jwasm -nologo -mz -Sg -DBINDIR=$(odir) -DINT4102=0 -Fl$* -Fo$* Deb386.asm
-
-$(odir)\Deb386w.exe: Deb386.asm $(odir)\DebugR.bin Makefile dprintfr.inc dprintfp.inc vioout.inc kbdinp.inc auxout.inc
+$(odir)\Deb386.exe: Deb386.asm $(odir)\DebugR.bin Makefile dprintfr.inc dprintfp.inc vioout.inc kbdinp.inc auxout.inc
 !if $(AUX)
 	@jwasm -nologo -mz -Sg -DAUXOUT=1 -DAUXIN=1 -DBINDIR=$(odir) -Fl$* -Fo$* Deb386.asm
 !else

@@ -1,10 +1,12 @@
 
-;*** Deb386: ring 0 debugger for hdpmi/win3x.
+;--- Deb386: ring 0 debugger for hdpmi/jemm/win3x/win9x.
 ;--- uses Debug/X's DebugR.bin variant.
-;--- assembled with JWasm:
+;--- to be assembled with JWasm:
 ;---   jwasm -mz Deb386.asm
-;--- if Masm is used, DebugR.bin must be converted to DebugR.inc.
 ;--- if debug displays are enabled (_DEBUG), JWasm v2.17 is required.
+;--- if Masm is used, DebugR.bin must be converted to DebugR.inc, and
+;--- debug displays cannot be enabled.
+;--- best viewed with TAB size 4.
 
 	.286
 	.model tiny
@@ -14,33 +16,37 @@
 	option proc:private
 	.386
 
-OPT_INST   equ 1
-OPT_DEINST equ 2
-OPT_NOI41  equ 4
-OPT_ALTVID equ 8
-OPT_INT3INIT equ 16
+VERSION textequ <1.0>
 
+NOXMS   equ 1	; 1=don't use XMS to save DebugR init code, instead read the binary
 ifndef INT4102
-INT4102 equ 1	; 1=display debug string displays
+INT4102 equ 1	; 1=support int 41h, ax=2 - display strings
 endif
+ifndef VIOOUT
+VIOOUT equ 0	; 1=screen output
+endif
+ifndef KBDIN
+KBDIN  equ 0	; 1=kbd input
+endif
+ifndef AUXOUT
+AUXOUT equ 0	; 1=serial output
+endif
+ifndef AUXIN
+AUXIN  equ 0	; 1=serial input
+endif
+
+OPT_INST     equ 1
+OPT_DEINST   equ 2
+OPT_NOI41    equ 4
+OPT_ALTVID   equ 8
+OPT_INT3INIT equ 16
+OPT_SINGLE   equ 32
+OPT_HDPMI    equ 64
 
 cr equ 13
 lf equ 10
 
 MEMADD equ 480h	; DebugR needs: 200h stack, 257 line_in buffer, 264 line_out buffer
-
-ifndef VIOOUT
-VIOOUT equ 0
-endif
-ifndef KBDIN
-KBDIN  equ 0
-endif
-ifndef AUXOUT
-AUXOUT equ 0
-endif
-ifndef AUXIN
-AUXIN  equ 0
-endif
 
 DStr macro text:vararg
 local sym
@@ -58,6 +64,7 @@ STACK32 segment use32 stack 'STACK'
 STACK32 ends
 endif
 
+ife NOXMS
 XMSMOVE struct
 dwSize dd ?
 hSrc   dw ?
@@ -65,13 +72,14 @@ dwSrc  dd ?
 hDst   dw ?
 dwDst  dd ?
 XMSMOVE ends
+endif
 
 	include debugsys.inc
 
 	.data
 
 oldint68 dd ?
-ife (AUXIN or KBDIN)
+if KBDIN
 oldint09 dd ?
 endif
 oldint41 df ?
@@ -82,7 +90,7 @@ wOpt  dw 0
 wKDCS dw ?
 wKDDS dw ?
 wFlat dw ?
-wGDT  dw ?
+;wGDT  dw ?
 dwCmdL dd ?
 
 dfInit label fword
@@ -93,18 +101,23 @@ dfGetStk label fword
 wOfsGetStk dw offset startdbg+3, 0
 wSegGetStk dw ?
 
-ife ( AUXOUT or VIOOUT )
+if VIOOUT
 dfPutChr df ?
 endif
-ife ( AUXIN or KBDIN )
+if KBDIN
 dfGetChr df ?
 endif
 
-dwXMS   dd ?
-wHdl    dw ?
-wStart  dw ?
-wSize   dw ?
+wStart  dw ?	; start offset of DebugR init code
+wSize   dw ?	; size of DebugR init code
+wHdl    dw ?	; file/XMS handle
+if NOXMS
+wMyPSP  dw ?	; PSP of Deb386
+wHdrSiz dw ?	; size of MZ hdr in bytes
+else
+dwXMS   dd ?   
 xmsbm   XMSMOVE <>
+endif
 
 	.code
 
@@ -129,10 +142,11 @@ else
 @dprintfp textequ <;>
 endif
 
+if AUXOUT or AUXIN
+	include auxout.inc
+endif
 if VIOOUT
 	include vioout.inc
-elseif AUXOUT
-	include auxout.inc
 endif
 if KBDIN
 	include kbdinp.inc
@@ -155,8 +169,14 @@ endif
 	@dprintfr "int 68, ax=%X, unhandled", ax
 	jmp cs:[oldint68]
 isId:
+	cmp cs:[wKDCS],0	; PM init happened already?
+	jz @F
+	test cs:[wOpt], OPT_SINGLE	; in single mode no further identification
+	jnz _iret
+@@:
 	@dprintfr "int 68, ax=%X, returning D386_Id", ax
 	mov ax, D386_Id
+_iret:
 	iret
 ifdef _DEBUG
 is51:
@@ -187,7 +207,7 @@ isPrepPM:
 	add cx, 8
 	mov cs:[wKDDS], cx
 	mov cs:[wFlat], bx
-	mov cs:[wGDT], dx
+;	mov cs:[wGDT], dx
 
 ;--- init code/data GDT descriptors for DebugR
 
@@ -214,6 +234,30 @@ isPrepPM:
 
 	push cs
 	pop ds
+if NOXMS
+	int 3
+	mov ah, 51h
+	int 21h
+	push bx
+	mov bx, [wMyPSP]
+	mov ah, 50h
+	int 21h
+	mov bx, [wHdl]
+	mov dx, [wStart]
+	push dx
+	add dx, [wHdrSiz]
+	xor cx, cx
+	mov ax, 4200h
+	int 21h
+	pop dx
+	add dx, offset startdbg
+	mov cx, [wSize]
+	mov ah, 3fh
+	int 21h
+	pop bx
+	mov ah, 50h
+	int 21h
+else
 	mov si, offset xmsbm
 ;	mov [si].XMSMOVE.dwSize, sizedbg
 	mov ax, [wHdl]
@@ -225,8 +269,9 @@ isPrepPM:
 	mov word ptr [si].XMSMOVE.dwDst+2, cs
 	mov ah, 0Bh
 	call [dwXMS]
+endif
 
-ife (AUXIN or KBDIN)
+if KBDIN
 
 ;--- get the real-mode int 09 in case we rely
 ;--- on working kbd driver code in real-mode.
@@ -335,28 +380,28 @@ initIDT:
 
 ;--- called with es:edi=IDT
 
-if (AUXOUT or VIOOUT) eq 0 or (AUXIN or KBDIN) eq 0
-;--- if i/o must be thru HDPMI, exit quickly if not called by HDPMI
-	cmp dword ptr ds:[0], "MPDH"   
-	jz @F
-	retd
-@@:
-endif
-
 	pushad
 	push ds
 	mov ds, cs:[wKDDS]
 
-;--- HDPMI specific: set i/o vectors supplied by hdpmi
-
+if  (VIOOUT or KBDIN)
+	xor ax, ax
+	mov word ptr [dfPutChr+4], ax
+	mov word ptr [dfGetChr+4], ax
+	test [wOpt], OPT_HDPMI			; use i/o vectors supplied by hdpmi?
+	jz @F
+	cmp dword ptr ss:[0], "MPDH"	; check caller, must be HDPMI
+	jnz @F
 	mov ax, [esp+2+8*4+4]	; get callers CS
-ife (AUXOUT or VIOOUT)
+ if VIOOUT
 	mov dword ptr [dfPutChr+0], ebx
 	mov word ptr [dfPutChr+4], ax
-endif
-ife (AUXIN or KBDIN)
+ endif
+ if KBDIN
 	mov dword ptr [dfGetChr], edx
 	mov word ptr [dfGetChr+4], ax
+ endif
+@@:
 endif
 
 ;--- install int 41h handler
@@ -427,6 +472,8 @@ vioproc proc far
 	retd
 is0E:
 if VIOOUT
+	cmp word ptr cs:[dfPutChr+4],0
+	jnz @F
 	cmp cs:[bAlt],0
 	jz isStd
 	call SwitchVid	; assumes ds==dgroup!
@@ -438,9 +485,8 @@ if VIOOUT
 	retd
 isStd:
 	call VioPutChar
-elseif AUXOUT
-	call AuxPutChar
-else
+	retd
+@@:
 	pusha
 	mov cl, al
 	call cs:[dfGetStk]	; get current ring0 stack
@@ -453,6 +499,8 @@ else
 	mov ss, di
 	mov sp, bp
 	popa
+else
+	call AuxPutChar
 endif
 	retd
 is03:		; get cursor pos
@@ -498,33 +546,37 @@ vioproc endp
 kbdproc proc far
 if AUXIN
 	call AuxGetChar
-elseif KBDIN
-	call KbdGetChar
+	retd
 else
+	cmp word ptr cs:[dfGetChr+4], 0
+	jnz @F
+	call KbdGetChar
+	retd
+@@:
 	pusha
 	mov cl, al
 	call cs:[dfGetStk]
 	mov bp, sp
 	mov ss, dx
 	mov esp, eax
-if 1	; to play it safe, reset int 09
+ if 1	; to play it safe, reset int 09
 	push ds
 	mov ds, cs:[wFlat]
 	mov eax, cs:[oldint09]
 	push dword ptr ds:[9*4]
 	mov ds:[9*4], eax
-endif
+ endif
 	call cs:[dfGetChr]
-if 1
+ if 1
 	pop dword ptr ds:[9*4]
 	pop ds
-endif
+ endif
 	mov ss, cs:[wKDDS]
 	movzx esp, bp
 	mov [bp+7*2], ax
 	popa
-endif
 	retd
+endif
 kbdproc endp
 
 ifdef _DEBUG
@@ -543,6 +595,7 @@ _ITEXT segment word public 'DATA'
 DGROUP group _ITEXT
 
 ;--- check cmdline options
+;--- out: di=options, dx=optional -i argument
 
 handle_options proc
 
@@ -564,13 +617,15 @@ nextarg:
 
 	or al, 20h
 	cmp ax, 'i'
-	jnz noti
+	jnz notis
 	or di, OPT_INST
-	mov dx, [bx]
-	and dx, dx
-	jz @F
-	add bx, 2
-@@:
+	retn
+notis:
+	cmp ax, ':i'
+	jnz noti
+	cmp byte ptr [si], 0
+	jz erropt
+	mov dx, si
 	retn
 noti:
 	cmp ax, 'u'
@@ -594,6 +649,11 @@ if VIOOUT
 	or di, OPT_ALTVID
 	retn
 @@:
+	cmp ax,"h"
+	jnz @F
+	or di, OPT_HDPMI
+	retn
+@@:
 endif
 if AUXIN or AUXOUT
 	cmp ax,':c'
@@ -608,9 +668,14 @@ if AUXIN or AUXOUT
 	retn
 @@:
 endif
+	cmp ax,"s"
+	jnz @F
+	or di, OPT_SINGLE
+	retn
+@@:
 
 ;--- handle further options here
-
+erropt:
 	pop ax
 error:
 	stc
@@ -621,23 +686,31 @@ doneargs:
 	ret
 handle_options endp
 
+;--- main: install, uninstall, print help
+
 main proc c argc:word, argv:ptr
 
 	mov ah, 51h
 	int 21h
 	mov es, bx
+if NOXMS
+	mov [wMyPSP], es
+endif
 
 	mov bx, argv
 	add bx, 2
 	call handle_options
 	jc disphelp	; invalid cmdline arg
-	test di, OPT_INST
-	jnz install
-	test di, OPT_DEINST
-	jnz uninstall
-	jmp disphelp
+	mov ax, di
+	cmp ax, OPT_DEINST	; -u allows no other options
+	jz uninstall
+	test al, OPT_DEINST
+	jnz disphelp
+	test al, OPT_INST
+	jz disphelp
 
-install:
+;--- install
+
 	mov [wOpt], di
 	mov di, 81h
 	and dx, dx
@@ -673,12 +746,15 @@ endif
 
 	push 0
 	pop es
-	cmp dword ptr  es:[68h*4], 0
+	mov eax, es:[68h*4]
+	and eax, eax
 	jz @F
+	mov dx, DStr("Kernel debugger already installed",13,10)
+	cmp ax, offset myint68
+	jz printandexit
 	mov ah, D386_Identify
 	int 68h
 	cmp ax, D386_Id
-	mov dx, DStr("Deb386 already installed",13,10)
 	jz printandexit
 @@:
 
@@ -694,8 +770,14 @@ endif
 	mov [wSize], cx
 	mov [wStart], di
 
+;--- with option -s, no XMS or file handling is needed
+;--- since DebugR initialization is done once only.
 
-;--- get XMS block to save/restore DebugR.bin binary
+	test [wOpt], OPT_SINGLE
+	jnz noreinit
+
+ife NOXMS
+;--- get XMS block to save/restore DebugR's init code part
 	mov ax, 4300h
 	int 2Fh
 	cmp al, 80h
@@ -730,6 +812,41 @@ endif
 	mov dx, DStr("XMS block move failed",13,10)
 	cmp ax, 0
 	jz printandexit
+else
+;--- get path of Deb386 and open it
+	mov es, [wMyPSP]
+	mov es, es:[002Ch]
+	xor di, di
+	mov al, 0
+	or cx, -1
+@@:
+	repnz scasb
+	cmp byte ptr es:[di], 0
+	jnz @B
+	add di, 3
+	push ds
+	push es
+	pop ds
+	mov dx, di
+	mov ax, 3D00h
+	int 21h
+	pop ds
+	mov dx, DStr("cannot open Deb386 binary",13,10)
+	jc printandexit
+	mov [wHdl], ax
+	mov bx, ax
+	sub sp, 10
+	mov dx, sp
+	mov cx, 10
+	mov ah, 3Fh
+	int 21h
+	add sp, 8
+	pop ax
+	shl ax, 4
+	mov [wHdrSiz], ax
+endif
+
+noreinit:
 
 ;--- hook Int 68h
 
@@ -744,8 +861,16 @@ endif
 	mov dx, DStr("Deb386 installed",13,10)
 	call printstring
 
-;--- go resident
+;--- close std files 0-4
+	mov cx, 5
+	xor bx, bx
+@@:
+	mov ah, 3Eh
+	int 21h
+	inc bx
+	loop @B
 
+;--- free environment
 	mov ax, cs
 	sub ax, 10h
 	mov es, ax
@@ -755,65 +880,100 @@ endif
 	mov ah, 49h
 	int 21h
 
+;--- go resident
 	mov dx, offset endres + 15
 	shr dx, 4
 	add dx, 10h
 	mov ax, 3100h
 	int 21h
 
-;--- just remove the installed TSR from memory and free the
-;--- XMS handle. There's no possibility to talk to the debugger core
+uninstall:
+
+;--- just remove the installed TSR from memory;
+;--- free the XMS handle/close the file.
+;--- There's no possibility to talk to DebugR
 ;--- in protected-mode and tell it to "deinstall".
 
-uninstall:
 	mov dx, DStr("No installed Deb386 found",13,10)
 	push 0
 	pop es
-	cmp dword ptr  es:[68h*4], 0
-	jz printandexit
-	mov ah, D386_Identify
-	int 68h
-	cmp ax, D386_Id
-	jnz printandexit
-
-	mov dx, DStr("Can't uninstall",13,10)
 	mov eax, es:[68h*4]
 	cmp ax, offset myint68
 	jnz printandexit
+
+;--- useless to call int 68h, the installed instance
+;--- might not reply if option -s is active.
+;	mov ah, D386_Identify
+;	int 68h
+;	cmp ax, D386_Id
+;	jnz printandexit
+
 	shr eax, 16
-	mov ds, ax
+
+	mov fs, ax		; fs = installed instance
+	mov ecx, fs:[0]
+	cmp ecx, cs:[0]
+	jnz printandexit
+
+;--- restore int 68h
 	mov dx, cs
 	sub dx, 10h
-	mov ecx, [oldint68]
+	mov ecx, fs:[oldint68]
 	mov es:[68h*4], ecx
+
+;--- set MCB owner to our PSP
 	sub ax, 10h+1
 	mov es, ax
 	mov es:[1], dx
-	mov dx, [wHdl]
+
+	test fs:[wOpt], OPT_SINGLE
+	jnz noxmsfh
+
+;--- free XMS/file handle
+ife NOXMS
+	mov dx, fs:[wHdl]
 	mov ah, 0Ah
-	call [dwXMS]
-	push cs
-	pop ds
+	call fs:[dwXMS]
+else
+	mov ah, 51h
+	int 21h
+	push bx
+	mov bx, fs:[wMyPSP]
+	mov ah, 50h
+	int 21h
+	mov bx, fs:[wHdl]
+	mov ah, 3Eh
+	int 21h
+	pop bx
+	mov ah, 50h
+	int 21h
+endif
+
+noxmsfh:
 	mov dx, DStr("Deb386 uninstalled",13,10)
 	jmp printandexit
 
 CONST segment
 helpmsg label byte
-	db "Deb386 v1.0, ring 0 debugger",13,10
+	db "Deb386 v",@CatStr(!",%VERSION,!")," - ring 0 debugger",13,10
 	db "usage: Deb386 [options]",13,10
 	db " options:",13,10
 if VIOOUT
-	db "  -2              use alternate video",13,10
+	db "  -2",9,9,"use alternate video",13,10
 endif
-	db "  -b              stop at init",13,10
+	db "  -b",9,9,"stop at init",13,10
 if AUXIN or AUXOUT
-	db "  -c:[1|2|3|4]    set COM port",13,10
+	db "  -c:[1|2|3|4]",9,"set COM port",13,10
 endif
-	db "  -i [argument]   install",13,10
-	db "  -n              invisible to Int 41h",13,10
-	db "  -u              uninstall",13,10
-	db "  The argument behind the -i option is passed to DebugR.",13,10
-	db "  It must be enclosed in quotes if it contains spaces.",13,10
+if VIOOUT
+	db "  -h",9,9,"use HDPMI for I/O",13,10
+endif
+	db "  -i[:argument]",9,"install",13,10
+	db "  -n",9,9,"invisible to Int 41h",13,10
+	db "  -s",9,9,"single mode",13,10
+	db "  -u",9,9,"uninstall",13,10
+	db "  The optional argument behind -i is passed to DebugR;",13,10
+	db "  If it contains spaces, it must be enclosed in quotes.",13,10
 	db '$'
 CONST ends
 

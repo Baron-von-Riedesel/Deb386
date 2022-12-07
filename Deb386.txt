@@ -1,42 +1,37 @@
 
  1. About Deb386
 
- Deb386 is a ring 0 debugger. It's using DebugR.bin, a variant of Debug/X,
- as the debugger core. There are two variants of Deb386 supplied, Deb386.exe
- and Deb386w.exe; the first is supposed to work with HDPMI only, while the
- latter should run with any privileged code. 
+  Deb386 is a PL0 debugger. It's using DebugR.bin, a variant of Debug/X,
+ as the debugger core. Once installed, the debugger may be activated by a
+ protected-mode program running at privilege level 0 ( also called "ring 0" ).
+ Once being activated, the debugger prompt will appear if an exception has
+ been detected.
+  Deb386 may be used to debug HDPMI (the HX DPMI host), Jemmex/Jemm386
+ ( v86-mode monitor programs ) or even Windows 3.1 or 9X.
 
 
  2. Usage
- 
- Deb386 is a DOS TSR, to install it run "deb386 -i". Once installed, it will
- become active as soon as a ring0-debugger-aware version of HDPMI is launched.
- This is important, so in other words: the debugger must be initialized by a
- program running in ring0 protected-mode, before it can do anything. After this
- step the debugger prompt will appear if an exception has been detected.
 
- Deb386 itself understands the following cmdline options:
+ Deb386 understands the following cmdline options:
 
+   -2   displays on secondary monitor ( if KBDIN/VIOOUT is active )
    -i   install
    -b   stop at init
+   -c:n COM port to use ( if AUXIN/AUXOUT is active )
+   -h   use HDPMI mode switches for I/O ( if KBDIN/VIOOUT is active )
    -n   make debugger invisible to Int 41h
+   -s   single mode
    -u   uninstall
 
- Deb386w additionally accepts:
-
-   -c:n COM port to use ( if AUXIN/AUXOUT is active )
-   -2   displays on secondary monitor ( if KBDIN/VIOOUT is active )
-
- Anything behind option -i will be passed to the debugger core DebugR.
+ Option -i has an optional argument that will be passed to the debugger core
+ DebugR.
 
 
  3. Details
 
- 3.1 Both Deb386 and Deb386w
-
  - The debugger uses the interrupt 68h real-mode API for ring0-debugger
    detection and initialization ( the same API is used by MS WDEB386 and
-   386SWAT ). It stays in conventional memory and so doesn't has to fiddle
+   386SWAT ). It stays in conventional memory and so doesn't have to fiddle
    with paging so far as the ring0 host "identity-maps" this part of memory.
     Note that if WDEB386 or 386SWAT are running, Deb386 will detect that and
    not install itself.
@@ -50,6 +45,12 @@
    detected by protected-mode programs, including the HX program loaders
    ( which will then emit a breakpoint at program start ). If this is to be
    avoided, add the /n option.
+
+ - The single mode option is useful if there exist the possibility that
+   multiple ring0 protected-mode applications may try to use the debugger
+   at the same time. This may happen if both a VCPI host and VCPI client
+   detect the presence of the debugger. Single mode will make Deb386 hide
+   itself once it has been initialized for protected-mode.
 
  - Deb386 doesn't use the 80386+ debug registers; to set a breakpoint it
    has to write an int3 instruction. If the memory page is readonly and the
@@ -65,32 +66,23 @@
    peculiarities. So, for example, it cannot distinguish "invalid page faults"
    and "valid" ones.
 
- 3.2 Deb386
-
- - As default, Deb386 uses the mode switching routines of HDPMI for its input
-   and output. The debugger will most likely crash if there's an error in those
-   routines.
-
  - HDPMI ring0 code runs with interrupts disabled. There may be some places
    that are untraceable, assuming that the code isn't interrupted. Also,
    mode-switching code cannot be single-stepped - so stop single-stepping
    if instructions like LIDT or LTR appear in the disassembly.
 
- - When uninstalling, there's no proper way for Deb386 to detect if a DPMI
-   host is still installed, with a IDT that has been modified by Deb386. So
-   always first uninstall the DPMI host, then Deb386.
+ - When uninstalling, there's no reliable way for Deb386 to detect if the
+   program that is currently debugged is still running ( with a IDT that has
+   been modified by Deb386 ). So always first uninstall the debugged program,
+   then Deb386.
 
- - Using option /b the debugger will stop while HDPMI is still located in
-   conventional memory.
+ - Using option /b the debugger will stop immediately after initialization.
+   HDPMI at this stage is still located in conventional memory.
 
- 3.3 Deb386w
+ - Regarding I/O there are currently two possibilities: either do it through
+   a serial line or using low-level video/keyboard code:
 
- - Deb386w does NOT do mode switches. This makes it more generic, but requires
-   to handle I/O on a rather low level. There are currently two possibilities:
-   either do the I/O through a serial line or using low-level video/keyboard
-   code:
-
-   a) I/O through a serial connection (COMx). This requires to assemble Deb386w
+   a) I/O through a serial connection (COMx). This requires to assemble Deb386
      with options -DAUXOUT=1 and -DAUXIN=1 ( see Makefile for details ). The
      default for the COM port is COM1, may be changed with option /C.
 
@@ -100,16 +92,16 @@
     -chardev stdio,id=char0,logfile=serial.log,signal=off -serial chardev:char0
 
    b) I/O through low-level video/keyboard code. This requires to assemble
-     Deb386w with options -DVIOOUT=1 and -DKBDIN=1. The output may be directed
+     Deb386 with options -DVIOOUT=1 and -DKBDIN=1. The output may be directed
      to a secondary ( monochrome ) adapter with cmdline option /2. The input
      is a slight problem, since key translations have to be done by the
      debugger; there exist 2 translation tables, for US or GR keyboards, default
      is GR ( see below how to set US ).
 
- - Since Deb386w uses the same interface than WDEB386 does, it might be used as
+ - Since Deb386 uses the same interface than WDEB386 does, it might be used as
    a ( rather restricted ) Win3x/Win9x kernel debugger. In any case, you'll
-   have to feed DebugR with the -m option to make it assume that the master PIC
-   vectors don't overlap with exception vectors.
+   have to feed DebugR with the -m option ( set as argument for -i ) to make it
+   assume that the master PIC vectors don't overlap with exception vectors.
 
 
  4, Requirements to create the Binaries
@@ -119,8 +111,8 @@
    - if debug displays are to be activated, JWasm v2.17+ is needed.
    - make utility.
 
-   "nmake aux=1" will create Deb386w.exe with AUXIN/AUXOUT enabled.
-   "nmake kbd=us" will create Deb386w.exe with US kbd layout support.
+   "nmake aux=1" will create Deb386.exe with AUXIN/AUXOUT enabled.
+   "nmake kbd=us" will create Deb386.exe with US kbd layout support.
 
 
  5. License

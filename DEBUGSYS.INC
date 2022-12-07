@@ -193,6 +193,7 @@ DS_GetSymbol            equ 8dh
 DS_CopyMem              equ 8eh	
 DS_JumpTableEnd         equ 8eh
 
+if 0
 SaveRegs_Struc	struc
 	Debug_EAX		dd	?
 	Debug_EBX		dd	?
@@ -270,6 +271,7 @@ AddrS	struc					; for printf service
 	AddrSize	db	0
 	AddrTask	dw	0
 AddrS	ends
+endif
 
 AddrTypeSize	equ	word ptr AddrType
 
