@@ -18,10 +18,6 @@
 
 VERSION textequ <1.0>
 
-NOXMS   equ 1	; 1=don't use XMS to save DebugR init code, instead read the binary
-ifndef INT4102
-INT4102 equ 1	; 1=support int 41h, ax=2 - display strings
-endif
 ifndef VIOOUT
 VIOOUT equ 0	; 1=screen output
 endif
@@ -34,6 +30,10 @@ endif
 ifndef AUXIN
 AUXIN  equ 0	; 1=serial input
 endif
+ifndef INT4102
+INT4102 equ 1	; 1=support int 41h, ax=2 - display strings
+endif
+NOXMS   equ 1	; 1=don't use XMS to save DebugR init code, instead read the binary
 
 OPT_INST     equ 1
 OPT_DEINST   equ 2
@@ -321,10 +321,8 @@ endif
 	jz @F
 if VIOOUT
 	call VioPutChar
-elseif AUXOUT
-	call AuxPutChar
 else
-	call cs:[dfPutChr]
+	call AuxPutChar
 endif
 	jmp @B
 @@:
@@ -871,6 +869,14 @@ noreinit:
 	loop @B
 
 ;--- free environment
+	mov cx, 5
+	xor bx, bx
+@@:
+	mov ah, 3Eh
+	int 21h
+	inc bx
+	loop @B
+
 	mov ax, cs
 	sub ax, 10h
 	mov es, ax
@@ -972,8 +978,8 @@ endif
 	db "  -n",9,9,"invisible to Int 41h",13,10
 	db "  -s",9,9,"single mode",13,10
 	db "  -u",9,9,"uninstall",13,10
-	db "  The optional argument behind -i is passed to DebugR;",13,10
-	db "  If it contains spaces, it must be enclosed in quotes.",13,10
+	db "  The argument behind the -i option is passed to DebugR.",13,10
+	db "  It must be enclosed in quotes if it contains spaces.",13,10
 	db '$'
 CONST ends
 
