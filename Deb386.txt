@@ -36,6 +36,25 @@
     Note that if WDEB386 or 386SWAT are running, Deb386 will detect that and
    not install itself.
 
+ - Regarding I/O there are currently two possibilities: it's either done
+   through a serial line or using low-level video/keyboard code:
+
+   a) I/O through a serial connection (COMx). This requires to assemble Deb386
+     with options -DAUXOUT=1 and -DAUXIN=1 ( see Makefile for details ). The
+     default for the COM port is COM1, may be changed with option /C.
+
+     As an example, if DOS is running in the Qemu emulator, one may connect the
+     emulated COM port to the terminal, using Qemu cmdline options:
+
+    -chardev stdio,id=char0,signal=off -serial chardev:char0
+
+   b) I/O through low-level video/keyboard code. This requires to assemble
+     Deb386 with options -DVIOOUT=1 and -DKBDIN=1. The output may be directed
+     to a secondary ( monochrome ) adapter with cmdline option /2. The input
+     is a slight problem, since key translations have to be done by the
+     debugger; there exist 2 translation tables, for US or GR keyboards, default
+     is GR ( see below how to set US ).
+
  - The exceptions that may wake up the debugger are 0, 1, 3, 6, 0Dh and 0Eh,
    in protected-mode only. No other events are handled. The debugger core
    DebugR does ignore all exceptions coming from v86-mode. So it's not possible
@@ -79,24 +98,12 @@
  - Using option /b the debugger will stop immediately after initialization.
    HDPMI at this stage is still located in conventional memory.
 
- - Regarding I/O there are currently two possibilities: either do it through
-   a serial line or using low-level video/keyboard code:
-
-   a) I/O through a serial connection (COMx). This requires to assemble Deb386
-     with options -DAUXOUT=1 and -DAUXIN=1 ( see Makefile for details ). The
-     default for the COM port is COM1, may be changed with option /C.
-
-     As an example, if DOS is running in the Qemu emulator, one may connect the
-     emulated COM port to the terminal, using Qemu cmdline options:
-
-    -chardev stdio,id=char0,logfile=serial.log,signal=off -serial chardev:char0
-
-   b) I/O through low-level video/keyboard code. This requires to assemble
-     Deb386 with options -DVIOOUT=1 and -DKBDIN=1. The output may be directed
-     to a secondary ( monochrome ) adapter with cmdline option /2. The input
-     is a slight problem, since key translations have to be done by the
-     debugger; there exist 2 translation tables, for US or GR keyboards, default
-     is GR ( see below how to set US ).
+ - There's a device driver variant of Deb386, Deb386.sys. It's meant to debug
+   Jemm386/JemmEx. Deb386.sys always runs with "single mode" enabled, that is,
+   it will become active for ONE program only. Note that the standard versions
+   of Jemm386/JemmEx aren't kernel debugger aware, they won't activate it. So
+   to make the debugger stop in Jemm during its initialization, you'll have to
+   create a version that communicates with the kernel debugger.
 
  - Since Deb386 uses the same interface than WDEB386 does, it might be used as
    a ( rather restricted ) Win3x/Win9x kernel debugger. In any case, you'll

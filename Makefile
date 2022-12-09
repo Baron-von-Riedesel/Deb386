@@ -17,7 +17,7 @@ DEBUGRDIR = \projects\debug\build
 
 odir = build
 
-ALL: $(odir) $(odir)\Deb386.exe $(odir)\ResWP.exe
+ALL: $(odir) $(odir)\Deb386.exe $(odir)\Deb386.sys $(odir)\ResWP.exe
 
 $(odir):
 	@mkdir $(odir)
@@ -27,6 +27,13 @@ $(odir)\Deb386.exe: Deb386.asm $(odir)\DebugR.bin Makefile dprintfr.inc dprintfp
 	@jwasm -nologo -mz -Sg -DAUXOUT=1 -DAUXIN=1 -DBINDIR=$(odir) -Fl$* -Fo$* Deb386.asm
 !else
 	@jwasm -nologo -mz -Sg -DVIOOUT=1 -DKBDIN=1 -DKEYS=KBD_$(KBD) -DBINDIR=$(odir) -Fl$* -Fo$* Deb386.asm
+!endif
+
+$(odir)\Deb386.sys: Deb386.asm $(odir)\DebugR.bin Makefile dprintfr.inc dprintfp.inc vioout.inc kbdinp.inc auxout.inc
+!if $(AUX)
+	@jwasm -nologo -mz -Sg -DAUXOUT=1 -DAUXIN=1 -DBINDIR=$(odir) -DDRIVER=1 -Fl$*d -Fo$*.sys Deb386.asm
+!else
+	@jwasm -nologo -mz -Sg -DVIOOUT=1 -DKBDIN=1 -DKEYS=KBD_$(KBD) -DBINDIR=$(odir) -DDRIVER=1 -Fl$*d -Fo$*.sys Deb386.asm
 !endif
 
 $(odir)\DebugR.bin: $(DEBUGRDIR)\DebugR.bin

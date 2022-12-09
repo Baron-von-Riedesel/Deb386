@@ -8,6 +8,20 @@
 ;--- debug displays cannot be enabled.
 ;--- best viewed with TAB size 4.
 
+ifndef DRIVER
+DRIVER  equ 0	; 1=creating device driver variant
+endif
+
+if DRIVER
+;--- in the driver variant, there's a small "prefix" segment (_TEXTD) that
+;--- contains the driver peculiarities. The real code segment ( _TEXT ) must
+;--- be para aligned.
+_TEXTD segment word public 'CODE'	; must be first segment
+_TEXTD ends
+_TEXT segment para public 'CODE'	; must be para aligned
+_TEXT ends
+endif
+
 	.286
 	.model tiny
 	.stack 1024
@@ -94,11 +108,11 @@ wFlat dw ?
 dwCmdL dd ?
 
 dfInit label fword
-wOfsInit dw offset startdbg, 0
+         dw offset startdbg, 0
 wSegInit dw ?
 
 dfGetStk label fword
-wOfsGetStk dw offset startdbg+3, 0
+           dw offset startdbg+3, 0
 wSegGetStk dw ?
 
 if VIOOUT
@@ -108,15 +122,63 @@ if KBDIN
 dfGetChr df ?
 endif
 
+ife DRIVER
 wStart  dw ?	; start offset of DebugR init code
 wSize   dw ?	; size of DebugR init code
 wHdl    dw ?	; file/XMS handle
-if NOXMS
+endif
+if DRIVER
+emptycl db 13
+else
+ if NOXMS
 wMyPSP  dw ?	; PSP of Deb386
 wHdrSiz dw ?	; size of MZ hdr in bytes
-else
+ else
 dwXMS   dd ?   
 xmsbm   XMSMOVE <>
+ endif
+endif
+
+if DRIVER
+_TEXTD segment
+	dw 0ffffh
+	dw 0ffffh
+	dw 8000h
+	dw offset devstrat		;device strategy
+	dw offset devint		;device interrupt
+	db 'DEB$$386'
+
+io struct
+cmdlen  db ?       ;+ 0:laenge der struktur
+        db ?       ;+ 1:
+cmd     db ?       ;+ 2
+status  dw ?       ;+ 3
+        db 8 dup (?); reserved
+        db ?       ;+ 0d
+dwSize  dd ?       ;+ 0e  init:return last byte
+cmdl    dd ?       ;+ 12  init:line
+io ends
+
+pIo dw 0,0
+
+devstrat:
+	mov cs:[pIo+0],bx
+	mov cs:[pIo+2],es
+	retf
+devint:
+	pusha
+	push ds
+	lds bx, dword ptr cs:[pIo]
+	mov [bx].io.status, 8103h
+	cmp [bx].io.cmd, 00
+@patch:
+	jnz donedrv
+	call initdrv
+donedrv:
+	pop ds
+	popa
+	retf
+_TEXTD ends
 endif
 
 	.code
@@ -230,12 +292,13 @@ isPrepPM:
 
 	push ds
 
+ife DRIVER
+
 ;--- reinit DebugR binary
 
 	push cs
 	pop ds
 if NOXMS
-	int 3
 	mov ah, 51h
 	int 21h
 	push bx
@@ -269,6 +332,8 @@ else
 	mov word ptr [si].XMSMOVE.dwDst+2, cs
 	mov ah, 0Bh
 	call [dwXMS]
+endif
+
 endif
 
 if KBDIN
@@ -626,11 +691,13 @@ notis:
 	mov dx, si
 	retn
 noti:
+ife DRIVER
 	cmp ax, 'u'
 	jnz @F
 	or di, OPT_DEINST
 	retn
 @@:
+endif
 	cmp ax,'n'
 	jnz @F
 	or di, OPT_NOI41
@@ -688,28 +755,40 @@ handle_options endp
 
 main proc c argc:word, argv:ptr
 
+ife DRIVER
 	mov ah, 51h
 	int 21h
 	mov es, bx
-if NOXMS
+ if NOXMS
 	mov [wMyPSP], es
+ endif
 endif
-
 	mov bx, argv
 	add bx, 2
 	call handle_options
 	jc disphelp	; invalid cmdline arg
 	mov ax, di
+ife DRIVER
 	cmp ax, OPT_DEINST	; -u allows no other options
 	jz uninstall
 	test al, OPT_DEINST
 	jnz disphelp
+endif
 	test al, OPT_INST
 	jz disphelp
 
 ;--- install
 
+if DRIVER
+	or di, OPT_SINGLE
+	mov eax, ds
+	shl eax, 4
+	add eax, offset emptycl
+	mov [dwCmdL], eax
+endif
+
 	mov [wOpt], di
+ife DRIVER
 	mov di, 81h
 	and dx, dx
 	jz noargs
@@ -726,6 +805,7 @@ noargs:
 	shl eax, 4
 	add eax, 81h
 	mov [dwCmdL], eax
+endif
 
 if VIOOUT
 	test [wOpt], OPT_ALTVID
@@ -755,6 +835,8 @@ endif
 	cmp ax, D386_Id
 	jz printandexit
 @@:
+
+ife DRIVER
 
 ;--- scan DebugR for start of _ITEXT
 	mov di, offset startdbg
@@ -843,6 +925,7 @@ else
 	shl ax, 4
 	mov [wHdrSiz], ax
 endif
+endif
 
 noreinit:
 
@@ -858,6 +941,10 @@ noreinit:
 
 	mov dx, DStr("Deb386 installed",13,10)
 	call printstring
+
+if DRIVER
+	ret
+else
 
 ;--- close std files 0-4
 	mov cx, 5
@@ -959,6 +1046,8 @@ noxmsfh:
 	mov dx, DStr("Deb386 uninstalled",13,10)
 	jmp printandexit
 
+endif
+
 CONST segment
 helpmsg label byte
 	db "Deb386 v",@CatStr(!",%VERSION,!")," - ring 0 debugger",13,10
@@ -976,8 +1065,10 @@ if VIOOUT
 endif
 	db "  -i[:argument]",9,"install",13,10
 	db "  -n",9,9,"invisible to Int 41h",13,10
+ife DRIVER
 	db "  -s",9,9,"single mode",13,10
 	db "  -u",9,9,"uninstall",13,10
+endif
 	db "  The argument behind the -i option is passed to DebugR.",13,10
 	db "  It must be enclosed in quotes if it contains spaces.",13,10
 	db '$'
@@ -997,6 +1088,50 @@ main endp
 
 	include setargv.inc
 
+if DRIVER
+
+;--- driver init
+;--- ds:bx=io
+
+initdrv proc far uses es
+	mov bp, sp
+	mov es, [bp+4]
+	assume es:_TEXTD
+	mov byte ptr es:[@patch], 0ebh
+	mov [bx].io.status, 0100h
+	mov word ptr [bx].io.dwSize+0, offset endres + 40h
+	mov word ptr [bx].io.dwSize+2, es
+	mov ax, sp
+	mov dx, ss
+	push cs
+	pop ss
+	mov sp,  offset start + 200h
+	push dx
+	push ax
+
+	les si, [bx].io.cmdl
+@@:
+	lodsb es:[si]
+	and al, al
+	jz @F
+	cmp al, ' '
+	ja @B
+@@:
+	push ss
+	pop ds
+	call _setargv
+	invoke main, [_argc], [_argv]
+	lss sp, dword ptr ds:[start+200h-4]
+	ret
+initdrv endp
+
+	align 2
+start:
+	mov ah, 4Ch
+	int 21h
+
+else
+
 ;--- setup tiny model, release DOS memory, call main()
 
 start:
@@ -1012,11 +1147,15 @@ start:
 	add bx, 10h
 	mov ah, 4Ah
 	int 21h
+	mov si, 81h
 	call _setargv
 	invoke main, [_argc], [_argv]
 	mov ah,4Ch
 	int 21h
 
+endif
+
 _ITEXT ends
+
 
 	END start

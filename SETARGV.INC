@@ -1,7 +1,7 @@
 
 ;--- read the commandline at PSP:81h
 ;--- and create an argc/argv structure on the stack.
-;--- in: ES=PSP, DS=DGROUP, SS=DGROUP
+;--- in: ES:SI=cmdline, DS=DGROUP, SS=DGROUP
 ;--- out: _argc (=[bp-2])
 ;---      _argv (=[bp-4])
 ;--- all std registers modified (including SP)
@@ -16,7 +16,7 @@ _setargv proc
 
     xor di, di              ; init argc
     xor dx, dx              ; init size of mem block
-    mov si, 81H
+;    mov si, 81H
     push es
     pop ds
 ;    assume ds:nothing      ; no need for assumes, since no global vars are accessed
