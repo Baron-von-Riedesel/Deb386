@@ -14,12 +14,10 @@ endif
 
 if DRIVER
 ;--- in the driver variant, there's a small "prefix" segment (_TEXTD) that
-;--- contains the driver peculiarities. The real code segment ( _TEXT ) must
-;--- be para aligned.
-_TEXTD segment word public 'CODE'	; must be first segment
+;--- contains the driver peculiarities. Must be defined BEFORE .model so
+;--- it's the very first code segment.
+_TEXTD segment para public 'CODE'
 _TEXTD ends
-_TEXT segment para public 'CODE'	; must be para aligned
-_TEXT ends
 endif
 
 	.286
@@ -141,12 +139,14 @@ endif
 
 if DRIVER
 _TEXTD segment
+starttextd:
 	dw 0ffffh
 	dw 0ffffh
 	dw 8000h
-	dw offset devstrat		;device strategy
-	dw offset devint		;device interrupt
-	db 'DEB$$386'
+	dw offset devstrat	; device strategy
+	dw offset devint	; device interrupt
+;	db '$debugDD'
+	db '$Deb386$'
 
 io struct
 cmdlen  db ?       ;+ 0:laenge der struktur
@@ -178,6 +178,8 @@ donedrv:
 	pop ds
 	popa
 	retf
+	align 16	; make sure _TEXT starts at a paragraph
+SIZETEXTD equ $ - starttextd
 _TEXTD ends
 endif
 
@@ -653,7 +655,7 @@ endres label byte
 
 ;--- segments _ITEXT and CONST won't become resident
 
-_ITEXT segment word public 'DATA'
+_ITEXT segment word public 'DATA'	; must not be 'CODE'
 
 DGROUP group _ITEXT
 
@@ -688,6 +690,7 @@ notis:
 	jnz noti
 	cmp byte ptr [si], 0
 	jz erropt
+	or di, OPT_INST
 	mov dx, si
 	retn
 noti:
@@ -1099,7 +1102,7 @@ initdrv proc far uses es
 	assume es:_TEXTD
 	mov byte ptr es:[@patch], 0ebh
 	mov [bx].io.status, 0100h
-	mov word ptr [bx].io.dwSize+0, offset endres + 40h
+	mov word ptr [bx].io.dwSize+0, offset endres + SIZETEXTD
 	mov word ptr [bx].io.dwSize+2, es
 	mov ax, sp
 	mov dx, ss
@@ -1135,7 +1138,12 @@ else
 ;--- setup tiny model, release DOS memory, call main()
 
 start:
+if 0
 	mov ax, @data
+else
+	mov ax, ds	; for the tiny model, avoid segment relocs
+	add ax, 10h
+endif
 	mov ds, ax
 	mov bx, ss
 	sub bx, ax

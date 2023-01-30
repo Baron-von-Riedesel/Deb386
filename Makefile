@@ -12,8 +12,17 @@ AUX=0
 !ifndef KBD
 KBD=GR
 !endif
+!ifndef DEBUG
+DEBUG=0
+!endif
 
 DEBUGRDIR = \projects\debug\build
+
+!if $(DEBUG)
+AOPTD=-D_DEBUG
+!else
+AOPTD=
+!endif
 
 odir = build
 
@@ -24,9 +33,9 @@ $(odir):
 
 $(odir)\Deb386.exe: Deb386.asm $(odir)\DebugR.bin Makefile dprintfr.inc dprintfp.inc vioout.inc kbdinp.inc auxout.inc
 !if $(AUX)
-	@jwasm -nologo -mz -Sg -DAUXOUT=1 -DAUXIN=1 -DBINDIR=$(odir) -Fl$* -Fo$* Deb386.asm
+	@jwasm -nologo -mz -Sg $(AOPTD) -DAUXOUT=1 -DAUXIN=1 -DBINDIR=$(odir) -Fl$* -Fo$* Deb386.asm
 !else
-	@jwasm -nologo -mz -Sg -DVIOOUT=1 -DKBDIN=1 -DKEYS=KBD_$(KBD) -DBINDIR=$(odir) -Fl$* -Fo$* Deb386.asm
+	@jwasm -nologo -mz -Sg $(AOPTD) -DVIOOUT=1 -DKBDIN=1 -DKEYS=KBD_$(KBD) -DBINDIR=$(odir) -Fl$* -Fo$* Deb386.asm
 !endif
 
 $(odir)\Deb386.sys: Deb386.asm $(odir)\DebugR.bin Makefile dprintfr.inc dprintfp.inc vioout.inc kbdinp.inc auxout.inc

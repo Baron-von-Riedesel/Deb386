@@ -1,5 +1,5 @@
 
-;--- read the commandline at PSP:81h
+;--- read the commandline at ES:SI
 ;--- and create an argc/argv structure on the stack.
 ;--- in: ES:SI=cmdline, DS=DGROUP, SS=DGROUP
 ;--- out: _argc (=[bp-2])
