@@ -71,10 +71,13 @@
    detect the presence of the debugger. Single mode will make Deb386 hide
    itself once it has been initialized for protected-mode.
 
- - Deb386 doesn't use the 80386+ debug registers; to set a breakpoint it
-   has to write an int3 instruction. If the memory page is readonly and the
-   CR0 WP bit is set, a page fault will occur. To avoid this error, one has
-   to clear the WP bit before the debug session; see tool ResWP.exe.
+ - Deb386's G command allows to optionally set breakpoints. However, these
+   breakpoints are implemented by writing int3 instructions to the given
+   addresses. If the memory page is readonly and the CR0 WP bit is set, a
+   page fault will occur. To avoid this error, one has to clear the WP bit
+   before the debug session; see tool ResWP.exe.
+   Optionally, Deb386's BP command may be used. This command uses the 80386+
+   debug registers to set a breakpoint, memory isn't altered. 
 
  - If the DPMI host runs clients with IOPL 0 ( there exists HDPMI variants that
    do that ), the clients will trigger an exception 0Dh if instructions CLI/STI

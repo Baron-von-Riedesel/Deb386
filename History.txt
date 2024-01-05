@@ -1,6 +1,7 @@
 
-  __/____: v1.1
+  02/2023: v1.1
     - device driver variant added.
+    - keyb_gr.in: added missing '{[]}' keys.
 
   12/2022: v1.0
     - initial.
