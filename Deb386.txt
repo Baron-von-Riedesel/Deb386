@@ -6,13 +6,13 @@
  protected-mode program running at privilege level 0 ( also called "ring 0" ).
  Once being activated, the debugger prompt will appear if an exception has
  been detected.
-  Deb386 may be used to debug HDPMI (the HX DPMI host), Jemmex/Jemm386
+  Deb386 may be used to debug HDPMI (the HX DPMI host), JemmEx/Jemm386
  ( v86-mode monitor programs ) or even Windows 3.1 or 9X.
 
 
  2. Usage
 
- Deb386 understands the following cmdline options:
+  Deb386 understands the following cmdline options:
 
    -2   displays on secondary monitor ( if KBDIN/VIOOUT is active )
    -i   install
@@ -23,11 +23,14 @@
    -s   single mode
    -u   uninstall
 
- Option -i has an optional argument that will be passed to the debugger core
+  Option -i has an optional argument that will be passed to the debugger core
  DebugR.
 
+  Deb386 has to be loaded *before* the ring0 host ( DPMI host, JemmEx, ... )
+ is loaded.
 
- 3. Details
+
+ 3. Details/Hints
 
  - The debugger uses the interrupt 68h real-mode API for ring0-debugger
    detection and initialization ( the same API is used by MS WDEB386 and
@@ -71,10 +74,11 @@
    detect the presence of the debugger. Single mode will make Deb386 hide
    itself once it has been initialized for protected-mode.
 
- - Deb386's G command allows to optionally set breakpoints. However, these
-   breakpoints are implemented by writing int3 instructions to the given
-   addresses. If the memory page is readonly and the CR0 WP bit is set, a
-   page fault will occur. To avoid this error, one has to clear the WP bit
+ - Deb386's G command allows to optionally set breakpoints. Furthermore,
+   the T and P commands may implicitely set a breakpoint as well. However,
+   these breakpoints are implemented by writing int3 instructions into code
+   sections. If the affected memory page is readonly and the CR0 WP bit is set,
+   a page fault will occur. To avoid this error, one has to clear the WP bit
    before the debug session; see tool ResWP.exe.
    Optionally, Deb386's BP command may be used. This command uses the 80386+
    debug registers to set a breakpoint, memory isn't altered. 
@@ -86,7 +90,9 @@
 
  - The debugger core DebugR has absolutely no knowledge about Windows or DOS
    peculiarities. So, for example, it cannot distinguish "invalid page faults"
-   and "valid" ones.
+   from "valid" ones. If this causes troubles because too many "valid" page
+   faults do occur, one may (temporarily) make Deb386 ignore page faults with
+   the VC/VT commands.
 
  - HDPMI ring0 code runs with interrupts disabled. There may be some places
    that are untraceable, assuming that the code isn't interrupted. Also,
@@ -95,8 +101,8 @@
 
  - When uninstalling, there's no reliable way for Deb386 to detect if the
    program that is currently debugged is still running ( with a IDT that has
-   been modified by Deb386 ). So always first uninstall the debugged program,
-   then Deb386.
+   been modified by Deb386 ). So always first terminate the debugged program,
+   then uninstall Deb386.
 
  - Using option /b the debugger will stop immediately after initialization.
    HDPMI at this stage is still located in conventional memory.
@@ -108,10 +114,11 @@
    to make the debugger stop in Jemm during its initialization, you'll have to
    create a version that communicates with the kernel debugger.
 
- - Since Deb386 uses the same interface than WDEB386 does, it might be used as
-   a ( rather restricted ) Win3x/Win9x kernel debugger. In any case, you'll
-   have to feed DebugR with the -m option ( set as argument for -i ) to make it
-   assume that the master PIC vectors don't overlap with exception vectors.
+ - Since Deb386 uses the same interface that WDEB386 does, it might be used as
+   a ( rather restricted ) Win3x/Win9x kernel debugger. These Windows variants
+   do reprogram the PIC - hardware interrupts are mapped to INT 50h-5Fh. That's
+   why you have to feed DebugR with the -m option ( set as argument for -i ) to
+   tell it that the master PIC vectors don't overlap with exception vectors.
 
 
  4, Requirements to create the Binaries
