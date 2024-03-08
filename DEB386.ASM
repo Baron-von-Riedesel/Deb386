@@ -28,7 +28,7 @@ endif
 	option proc:private
 	.386
 
-VERSION textequ <1.0>
+VERSION textequ <1.3>
 
 ifndef VIOOUT
 VIOOUT equ 0	; 1=screen output

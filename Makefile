@@ -26,7 +26,7 @@ AOPTD=
 
 odir = build
 
-ALL: $(odir) $(odir)\Deb386.exe $(odir)\Deb386.sys $(odir)\ResWP.exe
+ALL: $(odir) $(odir)\Deb386.exe $(odir)\Deb386.sys $(odir)\ResWP.exe Run386\Run386.exe
 
 $(odir):
 	@mkdir $(odir)
@@ -52,6 +52,9 @@ $(odir)\DebugR.bin: $(DEBUGRDIR)\DebugR.bin
 
 $(odir)\ResWP.exe: ResWP.asm
 	@jwasm -nologo -mz -Fl$* -Fo$* ResWP.asm
+
+Run386\Run386.exe: Run386\Run386.asm
+	@jwasm -nologo -mz -Fl$* -Fo$* Run386\Run386.asm
 
 clean:
 	@del $(odir)\Deb386.exe

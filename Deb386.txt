@@ -30,7 +30,17 @@
  is loaded.
 
 
- 3. Details/Hints
+ 3. Run386
+
+  Run386 is a very simple ring0 "host" that allows Deb386 to run in ring0,
+ without paging. May be used to view and enter the full 4 GB physical address
+ space of the machine. Just install deb386 with "deb386 -i", then launch
+ Run386.exe. Additionally, Run386 offers 2 ring transitions to 16-bit and 
+ 32-bit ring3 code that may be examined by Deb386. Run386 refuses to run in
+ v86-mode.
+
+
+ 4. Details/Hints
 
  - The debugger uses the interrupt 68h real-mode API for ring0-debugger
    detection and initialization ( the same API is used by MS WDEB386 and
@@ -74,14 +84,14 @@
    detect the presence of the debugger. Single mode will make Deb386 hide
    itself once it has been initialized for protected-mode.
 
- - Deb386's G command allows to optionally set breakpoints. Furthermore,
-   the T and P commands may implicitely set a breakpoint as well. However,
-   these breakpoints are implemented by writing int3 instructions into code
-   sections. If the affected memory page is readonly and the CR0 WP bit is set,
-   a page fault will occur. To avoid this error, one has to clear the WP bit
-   before the debug session; see tool ResWP.exe.
-   Optionally, Deb386's BP command may be used. This command uses the 80386+
-   debug registers to set a breakpoint, memory isn't altered. 
+ - Deb386's T and P commands may implicitely set a breakpoint. This breakpoint
+   is set by using the 80386+ debug register DR1.
+   Also, the G command allows to optionally set breakpoints. These are
+   implemented by writing INT3 instructions into code sections. If the affected
+   memory page is readonly and the CR0 WP bit is set, a page fault will occur.
+   To avoid this error, one has to clear the WP bit before the debug session;
+   see tool ResWP.exe. Optionally, Deb386's BP command may be used. This command
+   uses the 80386+ debug register DR0 to set a breakpoint. 
 
  - If the DPMI host runs clients with IOPL 0 ( there exists HDPMI variants that
    do that ), the clients will trigger an exception 0Dh if instructions CLI/STI
@@ -121,7 +131,7 @@
    tell it that the master PIC vectors don't overlap with exception vectors.
 
 
- 4, Requirements to create the Binaries
+ 5. Requirements to create the Binaries
 
    - JWasm.
    - DebugR - this Debug/X variant is included as a binary.
@@ -132,7 +142,7 @@
    "nmake kbd=us" will create Deb386.exe with US kbd layout support.
 
 
- 5. License
+ 6. License
 
  Deb386 is released under the MIT license. See license.txt for details.
 
