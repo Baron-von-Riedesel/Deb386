@@ -1,9 +1,10 @@
 
   03/2024: v1.3
-    - DEBUGR.BIN v2.03 included; uses 386 HW breakpoint 1 for breakpoints
+    - DEBUGR.BIN v2.03 included; uses 386 HW breakpoints for breakpoints
       in T, P and G cmd.
     - Run386 added, allowing Deb386 to run without the help of DPMI or VCPI
       hosts.
+    - cmdline option /s (single mode) removed, since obsolete.
 
   02/2024: v1.2
     - DEBUGR.BIN v2.02 included; new cmds BC & BP that use HW breakpoint 0.

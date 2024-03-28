@@ -116,7 +116,7 @@ idt_size equ $ - offset idt_start
 
 tss_start label dword
      dd 0
-r0sp dw 0,0
+r0esp dd 0
 r0ss dd data16sel
 	db 5Ch dup (0)
 
@@ -154,28 +154,22 @@ err:
 	pop ax	; exc#
 	pop edx	; eip
 	pop ecx	; cs
+	mov esp, ss:[r0esp]
 	invoke printf, CStr("exc %X at cs:ip=%X:%lX",lf), ax, cx, edx
-	mov sp, r0sp
-	jmp backfromr332
+	ret
 
 ;--- int 12h is used here to switch back to ring0
 
 int12:
-	add sp, 5*4	; skip return frame
-	cmp dl, 0
-	jz backfromr316
-	cmp dl, 1
-	jz backfromr332
-	int 3
+	mov esp, cs:[r0esp]
+	ret
 
 r3proc16 proc
-	mov dl, 0
 	int 12h
 r3proc16 endp
 
 _TEXT32 segment use32 word public 'CODE'
 r3proc32 proc
-	mov dl, 1
 	int 12h
 r3proc32 endp
 
@@ -186,8 +180,6 @@ _TEXT32 ends
 dotest proc
 
 ;--- prepare running r3 code
-
-	mov r0sp, sp
 
 	mov byte ptr [tssdsc][5], 89h
 	mov ax, tsssel
@@ -209,8 +201,10 @@ dotest proc
 	int 3
 @@:
 
-;--- switch to both 16-bit and 32-bit ring3 code
+;--- switch to 16-bit, then to 32-bit ring3 code
 
+	push offset @F
+	mov ss:[r0esp], esp
 	mov eax, esp
 	push 0
 	push data16r3	; ss
@@ -220,7 +214,8 @@ dotest proc
 	push 0
 	push offset r3proc16 ;ip
 	retd
-backfromr316::
+@@:
+	push offset @F
 	mov eax, esp
 	push 0
 	push data16r3	; ss
@@ -230,7 +225,7 @@ backfromr316::
 	push 0
 	push lowword offset r3proc32 ;ip
 	retd
-backfromr332::
+@@:
 	ret
 
 dotest endp
@@ -332,10 +327,17 @@ main proc
 	shr eax, 16
 	mov [code32r3dsc].base16_23, al
 
+	mov dx, CStr("no kernel debugger installed",13,10,'$')
+	push ds
+	push 0
+	pop ds
+	cmp dword ptr ds:[D386_RM_Int*4], 0
+	pop ds
+	jz exit
+	
 	mov ah, D386_Identify
 	int D386_RM_Int
 	cmp ax, D386_Id
-	mov dx, CStr("no kernel debugger installed",13,10,'$')
 	jnz exit
 	mov bx, flatsel   ; flat selector
 	mov cx, kdsel
@@ -365,6 +367,8 @@ main proc
 @@:
 	call dotest
 	call enterrm
+	mov ah, D386_Real_Mode_Init	; tell kd that we're finished
+	int D386_RM_Int
 	sti
 	ret
 error:
@@ -384,11 +388,13 @@ start:
 	shl bx, 4
 	mov ss, ax
 	add sp, bx
-	mov es, ax
 	mov bx, sp
 	shr bx, 4
+	add bx, 10h
 	mov ah, 4Ah
 	int 21h
+	mov ax, ds
+	mov es, ax
 	call main
 	mov ah, 4ch
 	int 21h

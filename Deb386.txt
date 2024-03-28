@@ -15,16 +15,17 @@
   Deb386 understands the following cmdline options:
 
    -2   displays on secondary monitor ( if KBDIN/VIOOUT is active )
-   -i   install
+   -i[:arg] install
    -b   stop at init
    -c:n COM port to use ( if AUXIN/AUXOUT is active )
    -h   use HDPMI mode switches for I/O ( if KBDIN/VIOOUT is active )
    -n   make debugger invisible to Int 41h
-   -s   single mode
    -u   uninstall
 
-  Option -i has an optional argument that will be passed to the debugger core
- DebugR.
+  The optional parameter 'arg' behind option -I will be passed to the debugger
+ core DebugR. DebugR understands arguments:
+   /m: assume exceptions vectors don't overlap with IRQs 0-7
+   /s: use soft breakpoints only
 
   Deb386 has to be loaded *before* the ring0 host ( DPMI host, JemmEx, ... )
  is loaded.
@@ -34,10 +35,11 @@
 
   Run386 is a very simple ring0 "host" that allows Deb386 to run in ring0,
  without paging. May be used to view and enter the full 4 GB physical address
- space of the machine. Just install deb386 with "deb386 -i", then launch
- Run386.exe. Additionally, Run386 offers 2 ring transitions to 16-bit and 
- 32-bit ring3 code that may be examined by Deb386. Run386 refuses to run in
- v86-mode.
+ space of the machine.
+  Usage: just install Deb386 with "deb386 -i", then launch Run386.exe. It
+ will stop at a breakpoint. Using the debugger's G(o) command will make Run386
+ to quit protected-mode and return to the DOS prompt.
+  Run386 refuses to run in v86-mode.
 
 
  4. Details/Hints
@@ -78,20 +80,19 @@
    ( which will then emit a breakpoint at program start ). If this is to be
    avoided, add the /n option.
 
- - The single mode option is useful if there exist the possibility that
-   multiple ring0 protected-mode applications may try to use the debugger
-   at the same time. This may happen if both a VCPI host and VCPI client
-   detect the presence of the debugger. Single mode will make Deb386 hide
-   itself once it has been initialized for protected-mode.
-
- - Deb386's T and P commands may implicitely set a breakpoint. This breakpoint
-   is set by using the 80386+ debug register DR1.
-   Also, the G command allows to optionally set breakpoints. These are
-   implemented by writing INT3 instructions into code sections. If the affected
-   memory page is readonly and the CR0 WP bit is set, a page fault will occur.
-   To avoid this error, one has to clear the WP bit before the debug session;
-   see tool ResWP.exe. Optionally, Deb386's BP command may be used. This command
-   uses the 80386+ debug register DR0 to set a breakpoint. 
+ - Deb386's T and P commands may implicitely set a breakpoint. As default, this
+   breakpoint is set by using the 80386+ debug registers. This also applies to
+   breakpoints set by the G command. If there are no more free breakpoints - or
+   if the usage of the debug registers has been switched off by cmdline option
+   /s -, "soft" breakpoints are used by writing INT3 instructions into code.
+    Breakpoints of the "INT3 type" have limitations. A page fault may occur
+   if the memory to write to is readonly and the CR0 WP bit is set; or if the
+   memory is ROM, the write may silently fail. To avoid page faults, the WP bit
+   may be cleared before the debug session; see tool ResWP.exe.
+    To disable usage of debug register breakpoints Deb386 must be installed
+   with command line option  -i:/s. This may be useful if the debugger runs in
+   an emulated environment ( i.e. 86box ), that don't implement support for the
+   hardware debug features of the cpu.
 
  - If the DPMI host runs clients with IOPL 0 ( there exists HDPMI variants that
    do that ), the clients will trigger an exception 0Dh if instructions CLI/STI
@@ -109,25 +110,23 @@
    mode-switching code cannot be single-stepped - so stop single-stepping
    if instructions like LIDT or LTR appear in the disassembly.
 
- - When uninstalling, there's no reliable way for Deb386 to detect if the
-   program that is currently debugged is still running ( with a IDT that has
-   been modified by Deb386 ). So always first terminate the debugged program,
-   then uninstall Deb386.
+ - When using option -u to uninstall Deb386, it might refuse to do so because
+   there's a still active "client" running ( with an IDT that has been modified
+   by Deb386 ). So first the debugged program has to be terminated, then Deb386.
 
  - Using option /b the debugger will stop immediately after initialization.
    HDPMI at this stage is still located in conventional memory.
 
  - There's a device driver variant of Deb386, Deb386.sys. It's meant to debug
-   Jemm386/JemmEx. Deb386.sys always runs with "single mode" enabled, that is,
-   it will become active for ONE program only. Note that the standard versions
-   of Jemm386/JemmEx aren't kernel debugger aware, they won't activate it. So
-   to make the debugger stop in Jemm during its initialization, you'll have to
-   create a version that communicates with the kernel debugger.
+   Jemm386/JemmEx. Note that the standard versions of Jemm386/JemmEx aren't
+   kernel debugger aware, they won't activate it. So to make the debugger stop
+   in Jemm during its initialization, you'll have to create a version that
+   communicates with the kernel debugger.
 
  - Since Deb386 uses the same interface that WDEB386 does, it might be used as
    a ( rather restricted ) Win3x/Win9x kernel debugger. These Windows variants
    do reprogram the PIC - hardware interrupts are mapped to INT 50h-5Fh. That's
-   why you have to feed DebugR with the -m option ( set as argument for -i ) to
+   why you have to feed DebugR with the /m option ( set as argument for -i ) to
    tell it that the master PIC vectors don't overlap with exception vectors.
 
 

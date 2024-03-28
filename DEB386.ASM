@@ -42,8 +42,11 @@ endif
 ifndef AUXIN
 AUXIN  equ 0	; 1=serial input
 endif
+ifndef INT4100
+INT4100 equ 1	; 1=support int 41h, ax=0 - display chars
+endif
 ifndef INT4102
-INT4102 equ 1	; 1=support int 41h, ax=2 - display strings
+INT4102 equ 0	; 1=support int 41h, ax=2 - display strings
 endif
 NOXMS   equ 1	; 1=don't use XMS to save DebugR init code, instead read the binary
 
@@ -52,7 +55,6 @@ OPT_DEINST   equ 2
 OPT_NOI41    equ 4
 OPT_ALTVID   equ 8
 OPT_INT3INIT equ 16
-OPT_SINGLE   equ 32
 OPT_HDPMI    equ 64
 
 cr equ 13
@@ -226,6 +228,8 @@ myint68 proc
 	jz isId
 	cmp ah, D386_Prepare_PMode
 	jz isPrepPM
+	cmp ah, D386_Real_Mode_Init	; back in real-mode, get ready for reinit pmode
+	jz isRMInit
 ifdef _DEBUG
 	cmp ah, D386_Display_Char
 	jz is51
@@ -233,11 +237,8 @@ endif
 	@dprintfr "int 68, ax=%X, unhandled", ax
 	jmp cs:[oldint68]
 isId:
-	cmp cs:[wKDCS],0	; PM init happened already?
-	jz @F
-	test cs:[wOpt], OPT_SINGLE	; in single mode no further identification
+	cmp cs:[wKDCS],0	; active PM client?
 	jnz _iret
-@@:
 	@dprintfr "int 68, ax=%X, returning D386_Id", ax
 	mov ax, D386_Id
 _iret:
@@ -251,6 +252,9 @@ is51:
 	pop bx
 	iret
 endif
+isRMInit:
+	mov cs:[wKDCS],0	; ready for another client
+	iret
 isPrepPM:
 
 	@dprintfr "int 68, ax=%X, cx=%X, bx=%X, dx=%X, ds:si=%X:%X, es:di=%X:%X", ax, cx, bx, dx, ds, si, es, di
@@ -401,6 +405,10 @@ endif
 myint41 proc
 	cmp ax, DS_DebLoaded
 	jz is4f
+if INT4100
+	cmp ax, DS_Out_Char
+	jz is00
+endif
 if INT4102
 	cmp ax, DS_Out_Str
 	jz is02
@@ -417,6 +425,18 @@ is4f:
 	@dprintfp "Int 41, DebLoaded: handled"
 	mov ax, DS_DebPresent
 	iretd
+if INT4100
+is00:
+	push eax
+	mov al, dl
+if VIOOUT
+	call VioPutChar
+else
+	call AuxPutChar
+endif
+	pop eax
+	iretd
+endif
 if INT4102
 is02:
 	pushad
@@ -736,11 +756,6 @@ if AUXIN or AUXOUT
 	retn
 @@:
 endif
-	cmp ax,"s"
-	jnz @F
-	or di, OPT_SINGLE
-	retn
-@@:
 
 ;--- handle further options here
 erropt:
@@ -783,7 +798,6 @@ endif
 ;--- install
 
 if DRIVER
-	or di, OPT_SINGLE
 	mov eax, ds
 	shl eax, 4
 	add eax, offset emptycl
@@ -852,12 +866,6 @@ ife DRIVER
 	shl cx, 2
 	mov [wSize], cx
 	mov [wStart], di
-
-;--- with option -s, no XMS or file handling is needed
-;--- since DebugR initialization is done once only.
-
-	test [wOpt], OPT_SINGLE
-	jnz noreinit
 
 ife NOXMS
 ;--- get XMS block to save/restore DebugR's init code part
@@ -1005,10 +1013,14 @@ uninstall:
 ;	jnz printandexit
 
 	shr eax, 16
-
 	mov fs, ax		; fs = installed instance
+
 	mov ecx, fs:[0]
 	cmp ecx, cs:[0]
+	jnz printandexit
+
+	cmp fs:[wKDCS], 0
+	mov dx, DStr("Deb386 is busy",13,10)
 	jnz printandexit
 
 ;--- restore int 68h
@@ -1021,9 +1033,6 @@ uninstall:
 	sub ax, 10h+1
 	mov es, ax
 	mov es:[1], dx
-
-	test fs:[wOpt], OPT_SINGLE
-	jnz noxmsfh
 
 ;--- free XMS/file handle
 ife NOXMS
@@ -1069,7 +1078,6 @@ endif
 	db "  -i[:argument]",9,"install",13,10
 	db "  -n",9,9,"invisible to Int 41h",13,10
 ife DRIVER
-	db "  -s",9,9,"single mode",13,10
 	db "  -u",9,9,"uninstall",13,10
 endif
 	db "  The argument behind the -i option is passed to DebugR.",13,10
